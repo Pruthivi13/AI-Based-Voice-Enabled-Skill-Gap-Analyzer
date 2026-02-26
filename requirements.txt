@@ -1,0 +1,15 @@
+torch
+transformers
+sentence-transformers
+openai-whisper
+scikit-learn
+librosa
+numpy
+pandas
+streamlit
+sounddevice
+scipy
+python-dotenv
+fastapi
+uvicorn
+python-multipart
