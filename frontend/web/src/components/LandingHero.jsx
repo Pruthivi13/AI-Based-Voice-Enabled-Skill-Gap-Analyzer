@@ -204,7 +204,7 @@ export default function LandingHero() {
             >
               Practice Smarter.{' '}
               <br className="hidden sm:block" />
-              <div className="my-2">
+              
                 <SplitText
                   text="Speak Better."
                   className="bg-clip-text text-transparent bg-gradient-to-r from-primary-500 to-amber-500 drop-shadow-sm font-extrabold"
@@ -220,7 +220,6 @@ export default function LandingHero() {
                   onLetterAnimationComplete={handleAnimationComplete}
                   showCallback
                 />
-              </div>
               <br />
               Get Interview Ready.
             </motion.h1>
