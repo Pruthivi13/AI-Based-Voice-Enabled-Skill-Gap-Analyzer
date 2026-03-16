@@ -17,13 +17,15 @@
  */
 import React from 'react';
 
+const WAVEFORM_BARS = [0, 1, 2, 3, 4, 5, 6];
+
 export default function RecordingControls({ isRecording, isPaused, onRecord, onPause, onStop }) {
   return (
     <div className="flex flex-col items-center gap-4">
       {/* Waveform placeholder — visual response to voice input */}
       {/* TODO: Replace with real audio visualization (canvas/SVG) */}
       <div className="flex items-end gap-1 h-8">
-        {[...Array(7)].map((_, i) => (
+        {WAVEFORM_BARS.map((i) => (
           <div
             key={i}
             className={`w-1 rounded-full transition-all duration-300 ${

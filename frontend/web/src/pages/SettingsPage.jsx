@@ -16,6 +16,23 @@
 import React, { useState } from 'react';
 import { useTheme } from '../context/ThemeContext';
 
+const ROLES = [
+  'Frontend Developer', 
+  'Backend Developer', 
+  'Full Stack Developer',
+  'Data Scientist', 
+  'DevOps Engineer', 
+  'Product Manager'
+];
+
+const THEMES = ['light', 'dark', 'system'];
+
+const NOTIFICATION_SETTINGS = [
+  { key: 'sessionReminders', label: 'Session Reminders' },
+  { key: 'weeklyProgress', label: 'Weekly Progress Reports' },
+  { key: 'newResources', label: 'New Resource Alerts' },
+];
+
 export default function SettingsPage() {
   // Theme state from global context (persisted to localStorage)
   const { theme, setTheme, isDark } = useTheme();
@@ -81,8 +98,7 @@ export default function SettingsPage() {
                 className="w-full mt-1 px-4 py-3 rounded-xl bg-surface-100 border border-surface-200
                            text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
-                {['Frontend Developer', 'Backend Developer', 'Full Stack Developer',
-                  'Data Scientist', 'DevOps Engineer', 'Product Manager'].map((r) => (
+                {ROLES.map((r) => (
                   <option key={r}>{r}</option>
                 ))}
               </select>
@@ -92,7 +108,7 @@ export default function SettingsPage() {
             <div>
               <label className="section-header">Theme</label>
               <div className="flex gap-3 mt-2">
-                {['light', 'dark', 'system'].map((t) => (
+                {THEMES.map((t) => (
                   <button
                     key={t}
                     onClick={() => setTheme(t)}
@@ -114,11 +130,7 @@ export default function SettingsPage() {
         <section className="card">
           <h3 className="font-bold text-ink-900 mb-4">Notifications</h3>
           <div className="space-y-3">
-            {[
-              { key: 'sessionReminders', label: 'Session Reminders' },
-              { key: 'weeklyProgress', label: 'Weekly Progress Reports' },
-              { key: 'newResources', label: 'New Resource Alerts' },
-            ].map((item) => (
+            {NOTIFICATION_SETTINGS.map((item) => (
               <label key={item.key} className="flex items-center justify-between cursor-pointer group">
                 <span className="text-sm font-medium text-ink-700 dark:text-ink-500 group-hover:text-ink-900 dark:group-hover:text-primary-100 transition-colors">{item.label}</span>
                 <div

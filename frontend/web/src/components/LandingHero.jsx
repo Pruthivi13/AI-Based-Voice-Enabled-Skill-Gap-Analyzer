@@ -76,12 +76,13 @@ function PreviewCard({ children, className, delay = 0 }) {
   );
 }
 
+const BARS = [3, 5, 8, 12, 7, 10, 6, 9, 4, 7, 11, 5, 8, 6];
+
 /* ── Waveform bars animation ── */
 function WaveformBars({ isDark }) {
-  const bars = [3, 5, 8, 12, 7, 10, 6, 9, 4, 7, 11, 5, 8, 6];
   return (
     <div className="flex items-end gap-[3px] h-8">
-      {bars.map((h, i) => (
+      {BARS.map((h, i) => (
         <motion.div
           key={i}
           animate={{ height: [h, h * 1.8, h, h * 1.4, h] }}
@@ -118,13 +119,16 @@ const fadeUp = {
 /* ════════════════════════════════════════════════════════════════
    MAIN HERO COMPONENT
    ════════════════════════════════════════════════════════════════ */
+
+const TRUST_METRICS = [
+  { value: '10K+', label: 'Sessions' },
+  { value: '4.8', label: 'Avg Rating' },
+  { value: '85%', label: 'Improvement' },
+];
+
 export default function LandingHero() {
   const navigate = useNavigate();
   const { isDark } = useTheme();
-
-  const handleAnimationComplete = () => {
-    console.log('All letters have animated!');
-  };
 
   return (
     <section className="relative w-full">
@@ -217,8 +221,6 @@ export default function LandingHero() {
                   threshold={0.1}
                   rootMargin="-100px"
                   textAlign="center"
-                  onLetterAnimationComplete={handleAnimationComplete}
-                  showCallback
                 />
               <br />
               Get Interview Ready.
@@ -271,11 +273,7 @@ export default function LandingHero() {
               className={`flex items-center justify-center lg:justify-start gap-6 mt-8 pt-8
                          border-t ${isDark ? 'border-white/10' : 'border-surface-200'}`}
             >
-              {[
-                { value: '10K+', label: 'Sessions' },
-                { value: '4.8', label: 'Avg Rating' },
-                { value: '85%', label: 'Improvement' },
-              ].map((stat, i) => (
+              {TRUST_METRICS.map((stat, i) => (
                 <div key={i} className="text-center lg:text-left">
                   <p className={`text-lg font-extrabold ${isDark ? 'text-white' : 'text-ink-900'}`}>
                     {stat.value}

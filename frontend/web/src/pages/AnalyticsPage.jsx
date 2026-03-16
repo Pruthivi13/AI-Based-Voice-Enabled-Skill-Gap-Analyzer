@@ -10,7 +10,7 @@
  *
  * TODO: Replace mock data with fetchAnalytics()
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -40,7 +40,7 @@ export default function AnalyticsPage() {
   const labelColor = isDark ? 'rgba(255,255,255,0.7)' : '#44403c';
 
   /* ── Score Trend Chart Data ── */
-  const trendData = {
+  const trendData = useMemo(() => ({
     labels: data.scoreTrend.map((p) => p.month),
     datasets: [
       {
@@ -56,9 +56,9 @@ export default function AnalyticsPage() {
         pointRadius: 5,
       },
     ],
-  };
+  }), [data, isDark]);
 
-  const trendOptions = {
+  const trendOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
     scales: {
@@ -69,10 +69,10 @@ export default function AnalyticsPage() {
       legend: { display: false },
       tooltip: { backgroundColor: isDark ? '#334155' : '#1c1917', cornerRadius: 8, padding: 10 },
     },
-  };
+  }), [isDark, axisTextColor, gridColor]);
 
   /* ── Weak Area Bar Chart ── */
-  const weakAreaData = {
+  const weakAreaData = useMemo(() => ({
     labels: data.weakAreas.map((w) => w.area),
     datasets: [
       {
@@ -82,9 +82,9 @@ export default function AnalyticsPage() {
         borderRadius: 8,
       },
     ],
-  };
+  }), [data]);
 
-  const barOptions = {
+  const barOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
     indexAxis: 'y',
@@ -93,7 +93,14 @@ export default function AnalyticsPage() {
       y: { ticks: { color: labelColor, font: { weight: '600' } }, grid: { display: false } },
     },
     plugins: { legend: { display: false } },
-  };
+  }), [axisTextColor, gridColor, labelColor]);
+
+  const statsList = useMemo(() => [
+    { label: 'Total Sessions', value: data.totalSessions, suffix: '' },
+    { label: 'Average Score', value: data.averageScore, suffix: ' / 10' },
+    { label: 'Most Improved', value: data.mostImproved, suffix: '' },
+    { label: 'Focus Area', value: data.focusArea, suffix: '' },
+  ], [data]);
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10">
@@ -102,12 +109,7 @@ export default function AnalyticsPage() {
 
       {/* ── Summary Stats ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-        {[
-          { label: 'Total Sessions', value: data.totalSessions, suffix: '' },
-          { label: 'Average Score', value: data.averageScore, suffix: ' / 10' },
-          { label: 'Most Improved', value: data.mostImproved, suffix: '' },
-          { label: 'Focus Area', value: data.focusArea, suffix: '' },
-        ].map((stat, i) => (
+        {statsList.map((stat, i) => (
           <div key={i} className="card text-center">
             <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${isDark ? 'text-white/40' : 'text-ink-500'}`}>{stat.label}</p>
             <p className={`text-2xl font-extrabold ${isDark ? 'text-white' : 'text-ink-900'}`}>

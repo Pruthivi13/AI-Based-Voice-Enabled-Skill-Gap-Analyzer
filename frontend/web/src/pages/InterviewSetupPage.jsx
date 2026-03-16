@@ -26,6 +26,7 @@ const roles = [
 const experienceLevels = ['Entry Level', 'Junior (1-2 yrs)', 'Mid (3-5 yrs)', 'Senior (5+ yrs)'];
 const interviewTypes = ['Technical', 'Behavioral', 'Mixed', 'System Design'];
 const difficulties = ['Easy', 'Medium', 'Hard'];
+const questionCounts = [3, 5, 7, 10];
 
 export default function InterviewSetupPage() {
   const navigate = useNavigate();
@@ -122,7 +123,7 @@ export default function InterviewSetupPage() {
               className="w-full mt-1 px-4 py-3 rounded-xl bg-surface-100 border border-surface-200
                          text-ink-900 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
-              {[3, 5, 7, 10].map((n) => (
+              {questionCounts.map((n) => (
                 <option key={n} value={n}>{n} questions</option>
               ))}
             </select>

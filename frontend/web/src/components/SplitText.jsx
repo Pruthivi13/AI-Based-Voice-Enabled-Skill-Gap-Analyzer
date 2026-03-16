@@ -26,20 +26,20 @@ export default function SplitText({
     }
   }, [isInView, hasAnimated]);
 
-  let elements = [];
-  if (splitType === 'chars') {
-    elements = text.split('');
-  } else if (splitType === 'words') {
-    elements = text.split(' ').map((word, i, arr) => word + (i < arr.length - 1 ? ' ' : ''));
-  }
+  const elements = React.useMemo(() => {
+    if (splitType === 'chars') {
+      return text.split('');
+    } else if (splitType === 'words') {
+      return text.split(' ').map((word, i, arr) => word + (i < arr.length - 1 ? ' ' : ''));
+    }
+    return [];
+  }, [text, splitType]);
 
-  const getEase = (easeStr) => {
-    if (easeStr === 'power3.out') return [0.215, 0.61, 0.355, 1];
-    if (easeStr === 'power4.out') return [0.165, 0.84, 0.44, 1];
-    return 'easeOut';
-  };
-
-  const currentEase = getEase(ease);
+  const currentEase = React.useMemo(() => {
+    if (ease === 'power3.out') return [0.215, 0.61, 0.355, 1];
+    if (ease === 'power4.out') return [0.165, 0.84, 0.44, 1];
+    return ease || 'easeOut';
+  }, [ease]);
 
   return (
     <div

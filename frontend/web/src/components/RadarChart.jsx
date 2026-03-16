@@ -8,7 +8,7 @@
  *   labels — Array of dimension names
  *   values — Array of scores (same order as labels)
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Chart as ChartJS,
   RadialLinearScale,
@@ -24,7 +24,7 @@ import { Radar } from 'react-chartjs-2';
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
 
 export default function RadarChart({ labels, values }) {
-  const data = {
+  const data = useMemo(() => ({
     labels,
     datasets: [
       {
@@ -39,9 +39,9 @@ export default function RadarChart({ labels, values }) {
         pointRadius: 5,
       },
     ],
-  };
+  }), [labels, values]);
 
-  const options = {
+  const options = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: true,
     scales: {
@@ -71,7 +71,7 @@ export default function RadarChart({ labels, values }) {
         padding: 10,
       },
     },
-  };
+  }), []);
 
   return <Radar data={data} options={options} />;
 }

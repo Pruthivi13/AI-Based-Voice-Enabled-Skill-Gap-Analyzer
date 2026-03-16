@@ -1,6 +1,31 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
+const makePaletteTexture = (stops) => {
+  const arr = Array.isArray(stops) && stops.length > 0 
+    ? (stops.length === 1 ? [stops[0], stops[0]] : stops) 
+    : ['#ffffff', '#ffffff'];
+  const w = arr.length;
+  const data = new Uint8Array(w * 4);
+  const c = new THREE.Color();
+  for (let i = 0; i < w; i++) {
+    c.set(arr[i]);
+    const idx = i * 4;
+    data[idx] = Math.round(c.r * 255);
+    data[idx + 1] = Math.round(c.g * 255);
+    data[idx + 2] = Math.round(c.b * 255);
+    data[idx + 3] = 255;
+  }
+  const tex = new THREE.DataTexture(data, w, 1, THREE.RGBAFormat);
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+  return tex;
+};
+
 export default function LiquidEther({
   mouseForce = 20,
   cursorSize = 100,
@@ -32,36 +57,6 @@ export default function LiquidEther({
 
   useEffect(() => {
     if (!mountRef.current) return;
-
-    function makePaletteTexture(stops) {
-      let arr;
-      if (Array.isArray(stops) && stops.length > 0) {
-        if (stops.length === 1) {
-          arr = [stops[0], stops[0]];
-        } else {
-          arr = stops;
-        }
-      } else {
-        arr = ['#ffffff', '#ffffff'];
-      }
-      const w = arr.length;
-      const data = new Uint8Array(w * 4);
-      for (let i = 0; i < w; i++) {
-        const c = new THREE.Color(arr[i]);
-        data[i * 4 + 0] = Math.round(c.r * 255);
-        data[i * 4 + 1] = Math.round(c.g * 255);
-        data[i * 4 + 2] = Math.round(c.b * 255);
-        data[i * 4 + 3] = 255;
-      }
-      const tex = new THREE.DataTexture(data, w, 1, THREE.RGBAFormat);
-      tex.magFilter = THREE.LinearFilter;
-      tex.minFilter = THREE.LinearFilter;
-      tex.wrapS = THREE.ClampToEdgeWrapping;
-      tex.wrapT = THREE.ClampToEdgeWrapping;
-      tex.generateMipmaps = false;
-      tex.needsUpdate = true;
-      return tex;
-    }
 
     const paletteTex = makePaletteTexture(colors);
     const bgVec4 = new THREE.Vector4(0, 0, 0, 0); // always transparent
@@ -987,18 +982,14 @@ export default function LiquidEther({
         }
       }
       dispose() {
-        try {
-          window.removeEventListener('resize', this._resize);
-          document.removeEventListener('visibilitychange', this._onVisibility);
-          Mouse.dispose();
-          if (Common.renderer) {
-            const canvas = Common.renderer.domElement;
-            if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
-            Common.renderer.dispose();
-            Common.renderer.forceContextLoss();
-          }
-        } catch (e) {
-          void 0;
+        window.removeEventListener('resize', this._resize);
+        document.removeEventListener('visibilitychange', this._onVisibility);
+        Mouse.dispose();
+        if (Common.renderer) {
+          const canvas = Common.renderer.domElement;
+          if (canvas?.parentNode) canvas.parentNode.removeChild(canvas);
+          Common.renderer.dispose();
+          Common.renderer.forceContextLoss();
         }
       }
     }
@@ -1074,44 +1065,12 @@ export default function LiquidEther({
 
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      if (resizeObserverRef.current) {
-        try {
-          resizeObserverRef.current.disconnect();
-        } catch (e) {
-          void 0;
-        }
-      }
-      if (intersectionObserverRef.current) {
-        try {
-          intersectionObserverRef.current.disconnect();
-        } catch (e) {
-          void 0;
-        }
-      }
-      if (webglRef.current) {
-        webglRef.current.dispose();
-      }
+      if (resizeObserverRef.current) resizeObserverRef.current.disconnect();
+      if (intersectionObserverRef.current) intersectionObserverRef.current.disconnect();
+      if (webglRef.current) webglRef.current.dispose();
       webglRef.current = null;
     };
-  }, [
-    BFECC,
-    cursorSize,
-    dt,
-    isBounce,
-    isViscous,
-    iterationsPoisson,
-    iterationsViscous,
-    mouseForce,
-    resolution,
-    viscous,
-    colors,
-    autoDemo,
-    autoSpeed,
-    autoIntensity,
-    takeoverDuration,
-    autoResumeDelay,
-    autoRampDuration
-  ]);
+  }, []); // Initialize WebGL context only once on mount
 
   useEffect(() => {
     const webgl = webglRef.current;
@@ -1141,6 +1100,15 @@ export default function LiquidEther({
         webgl.autoDriver.mouse.takeoverDuration = takeoverDuration;
       }
     }
+    
+    // Efficiently update palette texture without rebuilding the WebGL context
+    if (webgl.output?.output?.material?.uniforms?.palette) {
+      const oldTex = webgl.output.output.material.uniforms.palette.value;
+      const newTex = makePaletteTexture(colors);
+      webgl.output.output.material.uniforms.palette.value = newTex;
+      if (oldTex) oldTex.dispose();
+    }
+
     if (resolution !== prevRes) {
       sim.resize();
     }
