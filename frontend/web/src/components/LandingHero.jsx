@@ -14,7 +14,7 @@
  *
  * TODO: Connect CTAs to real navigation when auth flow is ready.
  */
-import React from 'react';
+import SplitText from "./SplitText";
 import { motion } from 'framer-motion';
 import { Mic, BarChart3, BrainCircuit, ArrowRight, Sparkles, TrendingUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -122,6 +122,10 @@ export default function LandingHero() {
   const navigate = useNavigate();
   const { isDark } = useTheme();
 
+  const handleAnimationComplete = () => {
+    console.log('All letters have animated!');
+  };
+
   return (
     <section className="relative w-full">
 
@@ -200,9 +204,23 @@ export default function LandingHero() {
             >
               Practice Smarter.{' '}
               <br className="hidden sm:block" />
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary-500 to-amber-500">
-                Speak Better.
-              </span>
+              <div className="my-2">
+                <SplitText
+                  text="Speak Better."
+                  className="bg-clip-text text-transparent bg-gradient-to-r from-primary-500 to-amber-500 drop-shadow-sm font-extrabold"
+                  delay={50}
+                  duration={1.25}
+                  ease="power3.out"
+                  splitType="chars"
+                  from={{ opacity: 0, y: 40 }}
+                  to={{ opacity: 1, y: 0 }}
+                  threshold={0.1}
+                  rootMargin="-100px"
+                  textAlign="center"
+                  onLetterAnimationComplete={handleAnimationComplete}
+                  showCallback
+                />
+              </div>
               <br />
               Get Interview Ready.
             </motion.h1>
