@@ -161,3 +161,5 @@ data/reference_answers/*
 !data/reference_answers/.keep
 *.json
 !data/keyword_maps.json
+node_modules/
+dist/
