@@ -119,8 +119,8 @@ export default function SettingsPage() {
               { key: 'weeklyProgress', label: 'Weekly Progress Reports' },
               { key: 'newResources', label: 'New Resource Alerts' },
             ].map((item) => (
-              <label key={item.key} className="flex items-center justify-between cursor-pointer">
-                <span className="text-sm font-medium text-ink-700">{item.label}</span>
+              <label key={item.key} className="flex items-center justify-between cursor-pointer group">
+                <span className="text-sm font-medium text-ink-700 dark:text-ink-500 group-hover:text-ink-900 dark:group-hover:text-primary-100 transition-colors">{item.label}</span>
                 <div
                   className={`w-11 h-6 rounded-full p-0.5 transition-colors cursor-pointer ${
                     notifications[item.key] ? 'bg-primary-500' : 'bg-surface-200'

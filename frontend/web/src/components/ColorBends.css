@@ -1,7 +1,0 @@
-/* ColorBends container — ensures the WebGL canvas fills its parent */
-.colorbends-container {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-}

@@ -15,45 +15,30 @@
  */
 import React from 'react';
 import { useTheme } from '../context/ThemeContext';
-import ColorBends from './ColorBends';
+import LiquidEther from './LiquidEther';
 
 /* ── Theme-specific presets (Safe Math Bounds) ── */
 
-/*
- * DARK preset: Vivid aurora ribbons.
- */
-const DARK_PRESET = {
-  colors: ['#00FFFF', '#7EF9FF', '#FFD700', '#FF69B4', '#8B5CF6', '#38BDF8'],
-  speed: 0.3,
-  rotation: 15,
-  scale: 1.1,
-  frequency: 1.0,
-  warpStrength: 1.0,
-  mouseInfluence: 0.5,
-  parallax: 0.2,
-  noise: 0.05,
-  transparent: false,
-};
-
-/*
- * LIGHT preset: Softer pastel version of the ribbons.
- */
-const LIGHT_PRESET = {
-  colors: ['#67e8f9', '#a5f3fc', '#fde68a', '#fcd34d', '#f9a8d4', '#c4b5fd'],
-  speed: 0.25,
-  rotation: 15,
-  scale: 1.2,
-  frequency: 1.0,
-  warpStrength: 0.9,
-  mouseInfluence: 0.4,
-  parallax: 0.2,
-  noise: 0.05,
-  transparent: false,
+// The user's exact requested configuration for a reddish-orange fluid background,
+// but mapped correctly to the `colors` array and optimized for performance.
+const FLUID_PRESET = {
+  // Using the reddish-orange hex codes requested
+  colors: ['#f0ebea', '#fe7f2a', '#f69131'],
+  mouseForce: 15, // Increased for stronger interaction
+  cursorSize: 250, // Increased for wider interaction radius
+  isViscous: false,
+  viscous: 10,
+  iterationsViscous: 8, // Explicit limit to prevent lag
+  iterationsPoisson: 8,  // Explicit limit to prevent lag
+  isBounce: true,
+  autoDemo: true,
+  autoSpeed: 0.2,
+  autoIntensity: 1.3,
+  resolution: 0.35, // Reduced from 0.75 to dramatically improve high-DPI GPU performance
 };
 
 export default function LandingBackdrop() {
   const { isDark } = useTheme();
-  const preset = isDark ? DARK_PRESET : LIGHT_PRESET;
 
   return (
     <div
@@ -62,7 +47,7 @@ export default function LandingBackdrop() {
       aria-hidden="true"
     >
       {/* WebGL canvas — the primary background layer */}
-      <ColorBends {...preset} />
+      <LiquidEther {...FLUID_PRESET} />
 
       {/* Light-mode readability wash only */}
       {!isDark && (
