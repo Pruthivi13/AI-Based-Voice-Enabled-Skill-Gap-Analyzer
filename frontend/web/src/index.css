@@ -1,0 +1,153 @@
+/* ============================================================
+   AI Interview Assistant — Global Styles & Design Tokens
+   ============================================================
+   Tailwind directives + custom utilities for the premium
+   glassmorphism + orange-accent design system.
+   Supports light/dark theme via Tailwind's class-based dark mode.
+   ============================================================ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---- Base Layer Overrides ---- */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Smooth theme transition for all elements */
+  *,
+  *::before,
+  *::after {
+    transition: background-color 0.25s ease, color 0.25s ease,
+                border-color 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  body {
+    @apply leading-relaxed bg-surface-50 text-ink-900;
+  }
+
+  /* Dark body */
+  .dark body {
+    @apply bg-dark-900 text-white;
+  }
+
+  /* Heading typography hierarchy from design.md */
+  h1 { @apply text-3xl sm:text-4xl font-extrabold tracking-tight text-ink-900; }
+  h2 { @apply text-2xl font-bold tracking-tight text-ink-900; }
+  h3 { @apply text-xl font-semibold text-ink-900; }
+  h4 { @apply text-lg font-semibold text-ink-900; }
+
+  .dark h1, .dark h2, .dark h3, .dark h4 {
+    @apply text-white;
+  }
+}
+
+/* ---- Reusable Component Classes ---- */
+@layer components {
+  /* Glass panel — frosted translucent surface for dark pages */
+  .glass-panel {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10
+           rounded-2xl shadow-glass;
+  }
+
+  /* Light card — elevated surface for light pages */
+  .card {
+    @apply bg-white rounded-2xl shadow-card
+           border border-surface-200/60 p-6;
+  }
+  .dark .card {
+    @apply bg-dark-800 border-dark-700/60 shadow-none text-white;
+  }
+
+  /* Primary CTA button */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2
+           bg-primary-500 hover:bg-primary-600 active:bg-primary-700
+           text-white font-semibold px-6 py-3
+           rounded-full shadow-md hover:shadow-lg
+           transition-all duration-200 ease-out;
+  }
+
+  /* Secondary / ghost button */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2
+           bg-white hover:bg-surface-100
+           text-ink-900 font-semibold px-6 py-3
+           rounded-full border border-surface-200
+           shadow-card hover:shadow-elevated
+           transition-all duration-200 ease-out;
+  }
+  .dark .btn-secondary {
+    @apply bg-dark-800 hover:bg-dark-700 text-white border-dark-600;
+  }
+
+  /* Dark-mode ghost button */
+  .btn-glass {
+    @apply inline-flex items-center justify-center gap-2
+           bg-white/10 hover:bg-white/20
+           text-white font-semibold px-6 py-3
+           rounded-full border border-white/20
+           backdrop-blur-md
+           transition-all duration-200 ease-out;
+  }
+
+  /* Status chip / badge */
+  .chip {
+    @apply inline-flex items-center px-3 py-1
+           text-xs font-bold uppercase tracking-wider
+           rounded-full;
+  }
+  .chip-success { @apply chip bg-green-100 text-green-700; }
+  .chip-warning { @apply chip bg-amber-100 text-amber-700; }
+  .chip-danger  { @apply chip bg-red-100 text-red-700; }
+  .chip-info    { @apply chip bg-blue-100 text-blue-700; }
+
+  .dark .chip-success { @apply bg-green-900/40 text-green-400; }
+  .dark .chip-warning { @apply bg-amber-900/40 text-amber-400; }
+  .dark .chip-danger  { @apply bg-red-900/40 text-red-400; }
+  .dark .chip-info    { @apply bg-blue-900/40 text-blue-400; }
+
+  /* Section header utility */
+  .section-header {
+    @apply text-xs font-bold uppercase tracking-widest text-primary-500 mb-1;
+  }
+}
+
+/* ---- Custom Utility Classes ---- */
+@layer utilities {
+  /* Gradient backgrounds */
+  .gradient-dark {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  }
+
+  .gradient-dark-radial {
+    background: radial-gradient(ellipse at top, #1e293b 0%, #0f172a 70%);
+  }
+
+  /* Subtle hover lift */
+  .hover-lift {
+    @apply transition-transform duration-200;
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+  }
+
+  /* Pulsing recording dot */
+  .recording-dot {
+    @apply w-3 h-3 rounded-full bg-red-500;
+    animation: recording-pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes recording-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.5; transform: scale(1.3); }
+  }
+
+  /* Glow effect for orange accent elements */
+  .glow-orange {
+    box-shadow: 0 0 20px rgba(249,115,22,0.3), 0 0 60px rgba(249,115,22,0.1);
+  }
+}
+
