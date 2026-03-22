@@ -14,105 +14,182 @@
  *
  * TODO: Replace mock data with fetchPerformanceAnalysis(sessionId)
  */
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { mockPerformanceAnalysis } from '../data/mockData';
+import { fetchReport, fetchSessionReview } from '../services/mockApi';
 import RadarChart from '../components/RadarChart';
 import ScoreCard from '../components/ScoreCard';
 import FeedbackPanel from '../components/FeedbackPanel';
 import StatusChip from '../components/StatusChip';
+import LoadingState from '../components/LoadingState';
+import ErrorState from '../components/ErrorState';
 
 export default function PerformanceAnalysisPage() {
   const navigate = useNavigate();
-  const data = mockPerformanceAnalysis; // TODO: Replace with real API call
+  const sessionId = sessionStorage.getItem('currentSessionId');
+
+  const [report, setReport] = useState(null);
+  const [review, setReview] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!sessionId) {
+      navigate('/setup');
+      return;
+    }
+
+    const loadData = async () => {
+      try {
+        const [reportData, reviewData] = await Promise.all([
+          fetchReport(sessionId),
+          fetchSessionReview(sessionId),
+        ]);
+        setReport(reportData);
+        setReview(reviewData);
+      } catch (err) {
+        setError('Failed to load results. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [sessionId, navigate]);
+
+  if (loading) return <LoadingState message="Loading your results..." />;
+  if (error)
+    return (
+      <ErrorState
+        title="Error"
+        message={error}
+        onRetry={() => window.location.reload()}
+      />
+    );
+
+  const radarData = report?.radarData || { labels: [], values: [] };
+  const recommendations = Array.isArray(report?.recommendations)
+    ? report.recommendations
+    : [];
+
+  const getStatus = (score) => {
+    if (score >= 8) return 'excellent';
+    if (score >= 7) return 'good';
+    if (score >= 6) return 'borderline';
+    return 'needs-improvement';
+  };
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10">
-      {/* ── Overall Score Hero ── */}
+      {/* Overall Score Hero */}
       <section className="text-center mb-12">
         <p className="section-header mb-2">Session Complete</p>
         <h1 className="mb-3">Performance Analysis</h1>
         <div className="inline-flex items-baseline gap-2 mb-2">
-          <span className="text-6xl font-extrabold text-primary-500">{data.overallScore}</span>
+          <span className="text-6xl font-extrabold text-primary-500">
+            {report?.overallScore ?? 'N/A'}
+          </span>
           <span className="text-2xl text-ink-500 font-bold">/ 10</span>
         </div>
         <p className="text-ink-500">
-          Overall Rating: <span className="font-bold text-ink-900">{data.ratingLabel}</span>
+          Overall Rating:{' '}
+          <span className="font-bold text-ink-900">
+            {report?.ratingLabel ?? 'N/A'}
+          </span>
         </p>
+        {report?.summary && (
+          <p className="text-ink-500 mt-2 max-w-xl mx-auto text-sm">
+            {report.summary}
+          </p>
+        )}
       </section>
 
-      {/* ── Radar Chart + Score Cards ── */}
+      {/* Radar Chart + Score Cards */}
       <section className="grid lg:grid-cols-2 gap-8 mb-12">
-        {/* Radar chart */}
         <div className="card flex items-center justify-center p-8">
           <div className="w-full max-w-sm">
-            <RadarChart labels={data.radarData.labels} values={data.radarData.values} />
+            {radarData.labels.length > 0 ? (
+              <RadarChart labels={radarData.labels} values={radarData.values} />
+            ) : (
+              <p className="text-ink-500 text-center">
+                No radar data available
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Score Cards */}
         <div className="grid grid-cols-2 gap-4">
-          <ScoreCard label="Communication" score={data.dimensions.communication} />
-          <ScoreCard label="Confidence" score={data.dimensions.confidence} />
-          <ScoreCard label="Technical Knowledge" score={data.dimensions.technicalKnowledge} />
-          <ScoreCard label="Clarity" score={data.dimensions.clarity} />
-          <ScoreCard label="Fluency" score={data.dimensions.fluency} />
-          {/* Overall in card form */}
-          <div className="card bg-primary-50 flex flex-col items-center justify-center">
-            <p className="text-xs font-bold uppercase tracking-wider text-primary-600 mb-1">Overall</p>
-            <p className="text-3xl font-extrabold text-primary-500">{data.overallScore}</p>
-          </div>
-        </div>
-      </section>
-
-      {/* ── AI Suggestions ── */}
-      <section className="mb-12">
-        <FeedbackPanel suggestions={data.aiSuggestions} />
-      </section>
-
-      {/* ── Question-by-Question Breakdown ── */}
-      <section className="mb-12">
-        <h2 className="mb-6">Question Breakdown</h2>
-        <div className="space-y-4">
-          {data.questionBreakdown.map((q) => (
-            <div key={q.id} className="card flex items-center justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className="text-sm font-bold text-ink-500">Q{q.id}</span>
-                  <StatusChip status={q.status} />
-                  <span className="chip bg-surface-100 text-ink-700">{q.topic}</span>
-                </div>
-                <p className="text-sm text-ink-700 line-clamp-1">{q.question}</p>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <p className="text-xl font-extrabold text-ink-900">{q.score}</p>
-                <p className="text-[10px] uppercase tracking-wider text-ink-500 font-bold">Score</p>
-              </div>
-              <button
-                onClick={() => navigate('/interview')}
-                className="text-sm font-semibold text-primary-500 hover:text-primary-600 flex-shrink-0"
-              >
-                Retry
-              </button>
-            </div>
+          <ScoreCard label="Overall Score" score={report?.overallScore ?? 0} />
+          {radarData.labels.map((label, i) => (
+            <ScoreCard
+              key={label}
+              label={label}
+              score={radarData.values[i] ?? 0}
+            />
           ))}
         </div>
       </section>
 
-      {/* ── Actions ── */}
+      {/* AI Recommendations */}
+      {recommendations.length > 0 && (
+        <section className="mb-12">
+          <FeedbackPanel suggestions={recommendations} />
+        </section>
+      )}
+
+      {/* Question Breakdown */}
+      {review?.questions?.length > 0 && (
+        <section className="mb-12">
+          <h2 className="mb-6">Question Breakdown</h2>
+          <div className="space-y-4">
+            {review.questions.map((q, idx) => (
+              <div
+                key={q.id}
+                className="card flex items-center justify-between gap-4"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="text-sm font-bold text-ink-500">
+                      Q{idx + 1}
+                    </span>
+                    {q.score && <StatusChip status={getStatus(q.score)} />}
+                  </div>
+                  <p className="text-sm text-ink-700 line-clamp-1">
+                    {q.content}
+                  </p>
+                  {q.transcript && (
+                    <p className="text-xs text-ink-500 mt-1 line-clamp-1">
+                      "{q.transcript}"
+                    </p>
+                  )}
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-xl font-extrabold text-ink-900">
+                    {q.score ?? 'N/A'}
+                  </p>
+                  <p className="text-[10px] uppercase tracking-wider text-ink-500 font-bold">
+                    Score
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Actions */}
       <section className="flex flex-wrap gap-4 justify-center">
-        <button onClick={() => navigate('/setup')} className="btn-secondary px-8">
+        <button
+          onClick={() => navigate('/setup')}
+          className="btn-secondary px-8"
+        >
           🔄 Practice Again
         </button>
         <button
-          onClick={() => {
-            // TODO: Call save session API
-            console.log('[Performance] Saving results...');
-            navigate('/history');
-          }}
+          onClick={() => navigate('/history')}
           className="btn-primary px-8"
         >
-          💾 Save & View History
+          💾 View History
         </button>
       </section>
     </div>

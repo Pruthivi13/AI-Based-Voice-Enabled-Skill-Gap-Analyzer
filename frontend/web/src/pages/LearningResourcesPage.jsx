@@ -8,25 +8,38 @@
  *
  * TODO: Replace mock data with fetchResources()
  */
-import React, { useState } from 'react';
-import { mockResources } from '../data/mockData';
+import React, { useState, useEffect } from 'react';
+import { fetchResources } from '../services/mockApi';
 import ResourceCard from '../components/ResourceCard';
+import LoadingState from '../components/LoadingState';
 
 export default function LearningResourcesPage() {
-  // TODO: Replace with fetchResources() call
-  const resources = mockResources;
-  const categories = ['All', ...new Set(resources.map((r) => r.category))];
+  const [resources, setResources] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('All');
 
-  const filtered = activeCategory === 'All'
-    ? resources
-    : resources.filter((r) => r.category === activeCategory);
+  useEffect(() => {
+    fetchResources()
+      .then(setResources)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const categories = ['All', ...new Set(resources.map((r) => r.category))];
+
+  const filtered =
+    activeCategory === 'All'
+      ? resources
+      : resources.filter((r) => r.category === activeCategory);
+
+  if (loading) return <LoadingState message="Loading resources..." />;
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10">
       <h1 className="mb-2">Learning Resources</h1>
       <p className="text-ink-500 mb-8">
-        Explore curated materials to strengthen your weak areas and sharpen interview skills.
+        Explore curated materials to strengthen your weak areas and sharpen
+        interview skills.
       </p>
 
       {/* Category filters */}
