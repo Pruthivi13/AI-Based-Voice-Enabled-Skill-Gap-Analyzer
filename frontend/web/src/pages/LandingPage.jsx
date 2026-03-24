@@ -13,16 +13,56 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import LandingHero from '../components/LandingHero';
 import LandingBackdrop from '../components/LandingBackdrop';
 
 export default function LandingPage() {
   const navigate = useNavigate();
   const { isDark } = useTheme();
+  const { currentUser } = useAuth();
 
   return (
     <div className="relative min-h-screen">
       <LandingBackdrop />
+
+      {/* ── Landing Navbar ── */}
+      <nav className="sticky top-0 z-50 w-full backdrop-blur-md bg-dark-900/60 border-b border-white/10">
+        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
+          <div
+            className="flex items-center gap-2 cursor-pointer"
+            onClick={() => navigate('/')}
+          >
+            <span className="text-2xl">🎯</span>
+            <span className="text-lg font-bold text-white">AI Interview Assistant</span>
+          </div>
+          <div className="flex items-center gap-3">
+            {currentUser ? (
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="px-5 py-2 rounded-full text-sm font-semibold bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+              >
+                Go to Dashboard →
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => navigate('/login')}
+                  className="px-5 py-2 rounded-full text-sm font-semibold text-white/80 hover:text-white transition-colors"
+                >
+                  Login
+                </button>
+                <button
+                  onClick={() => navigate('/register')}
+                  className="px-5 py-2 rounded-full text-sm font-semibold bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+                >
+                  Sign Up
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </nav>
       
       {/* ── Global Readability Pillar ── */}
       {/* A single continuous vertical blur to ensure text contrast across all sections without creating gaps or seams between them */}
@@ -89,13 +129,13 @@ export default function LandingPage() {
 
         {/* ── Action Buttons ── */}
         <section className="flex flex-wrap items-center justify-center gap-4 mb-16">
-          <button onClick={() => navigate('/setup')} className="btn-primary text-lg px-8 py-4">
+          <button onClick={() => navigate(currentUser ? '/setup' : '/login')} className="btn-primary text-lg px-8 py-4">
             ▶ Start Interview
           </button>
-          <button onClick={() => navigate('/resources')} className="btn-secondary text-lg px-8 py-4">
+          <button onClick={() => navigate(currentUser ? '/resources' : '/login')} className="btn-secondary text-lg px-8 py-4">
             📖 Explore Resources
           </button>
-          <button onClick={() => navigate('/history')} className="btn-secondary text-lg px-8 py-4">
+          <button onClick={() => navigate(currentUser ? '/history' : '/login')} className="btn-secondary text-lg px-8 py-4">
             📋 Past Reviews
           </button>
         </section>

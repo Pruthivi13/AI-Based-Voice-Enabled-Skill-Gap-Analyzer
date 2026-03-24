@@ -3,14 +3,12 @@
  *
  * Renders the brand mark, main navigation links, and profile controls.
  * Active link is highlighted with primary orange color.
- * Dark-mode aware via ThemeContext.
- *
- * NOTE: Auth state is a UI-only placeholder.
- * TODO: Connect to real auth context when backend is ready.
+ * Auth-connected with profile dropdown and logout.
  */
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 const navLinks = [
   { to: '/dashboard', label: 'Dashboard' },
@@ -22,7 +20,35 @@ const navLinks = [
 export default function Header() {
   const navigate = useNavigate();
   const { isDark } = useTheme();
+  const { currentUser, logout } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setIsDropdownOpen(false);
+      navigate('/');
+    } catch (err) {
+      console.error('Logout failed:', err);
+    }
+  };
+
+  const userInitial = currentUser?.displayName
+    ? currentUser.displayName.charAt(0).toUpperCase()
+    : currentUser?.email?.charAt(0).toUpperCase() || 'U';
 
   return (
     <header className={`sticky top-0 z-50 backdrop-blur-md border-b transition-colors duration-300 ${
@@ -85,11 +111,69 @@ export default function Header() {
             />
           </div>
 
-          {/* Avatar — placeholder for auth */}
-          <button className="w-9 h-9 rounded-full bg-primary-500 flex items-center justify-center shrink-0
-                             hover:ring-2 hover:ring-primary-200 transition-all">
-            <span className="text-white text-sm font-bold">A</span>
-          </button>
+          {/* Avatar with Dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              className="w-9 h-9 rounded-full bg-primary-500 flex items-center justify-center shrink-0
+                         hover:ring-2 hover:ring-primary-200 transition-all"
+            >
+              <span className="text-white text-sm font-bold">{userInitial}</span>
+            </button>
+
+            {/* Dropdown Menu */}
+            {isDropdownOpen && (
+              <div className={`absolute right-0 mt-2 w-56 rounded-xl shadow-xl border overflow-hidden z-50 ${
+                isDark
+                  ? 'bg-dark-800 border-dark-700'
+                  : 'bg-white border-surface-200'
+              }`}>
+                {/* User info */}
+                <div className={`px-4 py-3 border-b ${isDark ? 'border-dark-700' : 'border-surface-200'}`}>
+                  <p className={`text-sm font-semibold truncate ${isDark ? 'text-white' : 'text-ink-900'}`}>
+                    {currentUser?.displayName || 'User'}
+                  </p>
+                  <p className={`text-xs truncate ${isDark ? 'text-white/50' : 'text-ink-500'}`}>
+                    {currentUser?.email}
+                  </p>
+                </div>
+
+                {/* Links */}
+                <div className="py-1">
+                  <button
+                    onClick={() => { setIsDropdownOpen(false); navigate('/profile'); }}
+                    className={`w-full text-left px-4 py-2.5 text-sm font-medium flex items-center gap-2.5 transition-colors ${
+                      isDark
+                        ? 'text-white/80 hover:bg-white/5 hover:text-white'
+                        : 'text-ink-700 hover:bg-surface-50 hover:text-ink-900'
+                    }`}
+                  >
+                    👤 Profile
+                  </button>
+                  <button
+                    onClick={() => { setIsDropdownOpen(false); navigate('/settings'); }}
+                    className={`w-full text-left px-4 py-2.5 text-sm font-medium flex items-center gap-2.5 transition-colors ${
+                      isDark
+                        ? 'text-white/80 hover:bg-white/5 hover:text-white'
+                        : 'text-ink-700 hover:bg-surface-50 hover:text-ink-900'
+                    }`}
+                  >
+                    ⚙️ Settings
+                  </button>
+                </div>
+
+                {/* Logout */}
+                <div className={`border-t py-1 ${isDark ? 'border-dark-700' : 'border-surface-200'}`}>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-4 py-2.5 text-sm font-medium flex items-center gap-2.5 text-red-500 hover:bg-red-500/10 transition-colors"
+                  >
+                    🚪 Logout
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Mobile Menu Toggle Button */}
           <button 
@@ -148,10 +232,26 @@ export default function Header() {
                 {link.label}
               </NavLink>
             ))}
+            {/* Mobile Profile & Logout */}
+            <button
+              onClick={() => { setIsMenuOpen(false); navigate('/profile'); }}
+              className={`px-4 py-3 rounded-xl text-base font-semibold text-left transition-colors ${
+                isDark ? 'text-white hover:bg-white/10' : 'text-ink-700 hover:bg-surface-100'
+              }`}
+            >
+              👤 Profile
+            </button>
+            <button
+              onClick={() => { setIsMenuOpen(false); handleLogout(); }}
+              className="px-4 py-3 rounded-xl text-base font-semibold text-left text-red-500 hover:bg-red-500/10 transition-colors"
+            >
+              🚪 Logout
+            </button>
           </nav>
         </div>
       )}
     </header>
   );
 }
+
 

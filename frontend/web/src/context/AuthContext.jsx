@@ -2,12 +2,13 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
   sendEmailVerification,
 } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { auth, googleProvider } from '../config/firebase';
 
 const AuthContext = createContext();
 
@@ -26,6 +27,10 @@ export function AuthProvider({ children }) {
     return signInWithEmailAndPassword(auth, email, password);
   };
 
+  const googleSignIn = async () => {
+    return signInWithPopup(auth, googleProvider);
+  };
+
   const logout = () => {
     setToken(null);
     return signOut(auth);
@@ -33,6 +38,12 @@ export function AuthProvider({ children }) {
 
   const resetPassword = (email) => {
     return sendPasswordResetEmail(auth, email);
+  };
+
+  const resendVerification = async () => {
+    if (auth.currentUser && !auth.currentUser.emailVerified) {
+      await sendEmailVerification(auth.currentUser);
+    }
   };
 
   const getToken = async () => {
@@ -63,8 +74,10 @@ export function AuthProvider({ children }) {
     token,
     register,
     login,
+    googleSignIn,
     logout,
     resetPassword,
+    resendVerification,
     getToken,
     loading,
   };
@@ -81,3 +94,4 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
 }
+
