@@ -1,0 +1,224 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ExperienceLevel {
+  STUDENT
+  FRESHER
+  JUNIOR
+  MID
+  SENIOR
+}
+
+enum InterviewType {
+  TECHNICAL
+  HR
+  COMMUNICATION
+  MIXED
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum SessionStatus {
+  CREATED
+  IN_PROGRESS
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum QuestionCategory {
+  TECHNICAL
+  HR
+  COMMUNICATION
+  BEHAVIORAL
+}
+
+enum UploadType {
+  AUDIO
+  VIDEO
+  DOCUMENT
+}
+
+model User {
+  id            String         @id @default(cuid())
+  supabaseUid   String         @unique
+  email         String         @unique
+  password      String?
+  fullName      String?
+  emailVerified Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  profile       UserProfile?
+  settings      UserSettings?
+  sessions      InterviewSession[]
+  uploads       Upload[]
+
+  @@index([supabaseUid])
+  @@index([email])
+}
+
+model UserProfile {
+  id                String          @id @default(cuid())
+  userId            String          @unique
+  targetRole        String?
+  experienceLevel   ExperienceLevel?
+  preferredLanguage String          @default("en")
+  resumeUrl         String?
+  bio               String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserSettings {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  theme            String   @default("light")
+  sessionReminders Boolean  @default(true)
+  weeklyProgress   Boolean  @default(true)
+  newResources     Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model InterviewSession {
+  id              String           @id @default(cuid())
+  userId          String
+  title           String?
+  interviewType   InterviewType
+  targetRole      String
+  difficulty      Difficulty
+  experienceLevel ExperienceLevel?
+  questionCount   Int
+  status          SessionStatus    @default(CREATED)
+  jobDescription  String?
+  overallScore    Float?
+  startedAt       DateTime         @default(now())
+  endedAt         DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  responses       Response[]
+  report          Report?
+  uploads         Upload[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Question {
+  id               String            @id @default(cuid())
+  content          String
+  category         QuestionCategory
+  role             String?
+  difficulty       Difficulty
+  expectedKeywords Json?
+  timeLimitSeconds Int?              @default(120)
+  isActive         Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  responses        Response[]
+
+  @@index([category])
+  @@index([role])
+  @@index([difficulty])
+  @@index([isActive])
+}
+
+model Response {
+  id              String           @id @default(cuid())
+  sessionId       String
+  questionId      String
+  answerOrder     Int
+  transcript      String?
+  durationSeconds Int?
+  submittedAt     DateTime         @default(now())
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  session         InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  question        Question         @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  analysis        ResponseAnalysis?
+  uploads         Upload[]
+
+  @@unique([sessionId, questionId])
+  @@index([sessionId])
+  @@index([questionId])
+}
+
+model ResponseAnalysis {
+  id                 String   @id @default(cuid())
+  responseId         String   @unique
+  clarityScore       Float?
+  fluencyScore       Float?
+  confidenceScore    Float?
+  relevanceScore     Float?
+  grammarScore       Float?
+  pronunciationScore Float?
+  technicalScore     Float?
+  fillerWordCount    Int?
+  speechRateWpm      Int?
+  sentiment          String?
+  overallScore       Float?
+  feedbackJson       Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  response           Response @relation(fields: [responseId], references: [id], onDelete: Cascade)
+}
+
+model Report {
+  id                  String           @id @default(cuid())
+  sessionId           String           @unique
+  overallScore        Float
+  ratingLabel         String?
+  summary             String?
+  strengthsJson       Json?
+  weaknessesJson      Json?
+  recommendationsJson Json?
+  radarDataJson       Json?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  session             InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model Upload {
+  id              String            @id @default(cuid())
+  userId          String
+  sessionId       String?
+  responseId      String?
+  type            UploadType
+  fileUrl         String
+  storagePath     String?
+  mimeType        String?
+  sizeBytes       Int?
+  durationSeconds Int?
+  createdAt       DateTime          @default(now())
+
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session         InterviewSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  response        Response?         @relation(fields: [responseId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([responseId])
+  @@index([type])
+}

@@ -16,60 +16,118 @@
  */
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { createInterviewSession } from '../services/mockApi';
 
 const roles = [
-  'Frontend Developer', 'Backend Developer', 'Full Stack Developer',
-  'Data Scientist', 'DevOps Engineer', 'Product Manager',
-  'UI/UX Designer', 'Mobile Developer', 'QA Engineer',
+  'Frontend Developer',
+  'Backend Developer',
+  'Full Stack Developer',
+  'Data Scientist',
+  'DevOps Engineer',
+  'Product Manager',
+  'UI/UX Designer',
+  'Mobile Developer',
+  'QA Engineer',
 ];
 
-const experienceLevels = ['Entry Level', 'Junior (1-2 yrs)', 'Mid (3-5 yrs)', 'Senior (5+ yrs)'];
+const experienceLevels = [
+  'Entry Level',
+  'Junior (1-2 yrs)',
+  'Mid (3-5 yrs)',
+  'Senior (5+ yrs)',
+];
+const experienceMap = {
+  'Entry Level': 'STUDENT',
+  'Junior (1-2 yrs)': 'JUNIOR',
+  'Mid (3-5 yrs)': 'MID',
+  'Senior (5+ yrs)': 'SENIOR',
+};
 const interviewTypes = ['Technical', 'Behavioral', 'Mixed', 'System Design'];
+const interviewTypeMap = {
+  Technical: 'TECHNICAL',
+  Behavioral: 'HR',
+  Mixed: 'MIXED',
+  'System Design': 'TECHNICAL',
+};
 const difficulties = ['Easy', 'Medium', 'Hard'];
+const difficultyMap = {
+  Easy: 'EASY',
+  Medium: 'MEDIUM',
+  Hard: 'HARD',
+};
 const questionCounts = [3, 5, 7, 10];
 
 export default function InterviewSetupPage() {
   const navigate = useNavigate();
 
-  // Local form state — will be sent to backend as setup payload
   const [role, setRole] = useState('Frontend Developer');
   const [experience, setExperience] = useState('Entry Level');
   const [type, setType] = useState('Technical');
   const [questionCount, setQuestionCount] = useState(5);
   const [difficulty, setDifficulty] = useState('Medium');
   const [fileName, setFileName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  /** Simulates file selection — no real upload */
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (file) setFileName(file.name);
   };
 
-  /** Starts the interview flow */
-  const handleStart = () => {
-    // TODO: Call createInterviewSession({ role, experience, type, difficulty, questionCount })
-    console.log('[Setup] Starting interview:', { role, experience, type, difficulty, questionCount, fileName });
-    navigate('/interview');
+  const handleStart = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const payload = {
+        interviewType: interviewTypeMap[type],
+        targetRole: role,
+        difficulty: difficultyMap[difficulty],
+        experienceLevel: experienceMap[experience],
+        questionCount: Number(questionCount),
+      };
+      console.log('Sending payload:', payload);
+      const result = await createInterviewSession(payload);
+      
+      // Save sessionId and questions to sessionStorage for interview page
+      sessionStorage.setItem('currentSessionId', result.sessionId);
+      sessionStorage.setItem(
+        'currentQuestions',
+        JSON.stringify(result.questions)
+      );
+      navigate('/interview');
+    } catch (err) {
+      setError('Failed to create session. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-10">
       <h1 className="mb-2">Interview Setup</h1>
       <p className="text-ink-500 mb-10">
-        Configure your practice session. Select your target role, experience, and preferences.
+        Configure your practice session. Select your target role, experience,
+        and preferences.
       </p>
 
       <div className="card space-y-6">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+            {error}
+          </div>
+        )}
+
         {/* Role */}
         <div>
           <label className="section-header">Target Role</label>
           <select
             value={role}
             onChange={(e) => setRole(e.target.value)}
-            className="w-full mt-1 px-4 py-3 rounded-xl bg-surface-100 border border-surface-200
-                       text-ink-900 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="w-full mt-1 px-4 py-3 rounded-xl bg-surface-100 border border-surface-200 text-ink-900 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
-            {roles.map((r) => <option key={r}>{r}</option>)}
+            {roles.map((r) => (
+              <option key={r}>{r}</option>
+            ))}
           </select>
         </div>
 
@@ -120,11 +178,12 @@ export default function InterviewSetupPage() {
             <select
               value={questionCount}
               onChange={(e) => setQuestionCount(Number(e.target.value))}
-              className="w-full mt-1 px-4 py-3 rounded-xl bg-surface-100 border border-surface-200
-                         text-ink-900 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full mt-1 px-4 py-3 rounded-xl bg-surface-100 border border-surface-200 text-ink-900 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               {questionCounts.map((n) => (
-                <option key={n} value={n}>{n} questions</option>
+                <option key={n} value={n}>
+                  {n} questions
+                </option>
               ))}
             </select>
           </div>
@@ -151,8 +210,7 @@ export default function InterviewSetupPage() {
         {/* JD Upload */}
         <div>
           <label className="section-header">Job Description (Optional)</label>
-          <div className="mt-2 p-6 border-2 border-dashed border-surface-200 rounded-2xl
-                          text-center hover:border-primary-300 transition-colors cursor-pointer">
+          <div className="mt-2 p-6 border-2 border-dashed border-surface-200 rounded-2xl text-center hover:border-primary-300 transition-colors cursor-pointer">
             <input
               type="file"
               accept=".pdf,.doc,.docx,.txt"
@@ -170,8 +228,12 @@ export default function InterviewSetupPage() {
         </div>
 
         {/* Start Button */}
-        <button onClick={handleStart} className="btn-primary w-full text-lg py-4">
-          🎯 Start Interview
+        <button
+          onClick={handleStart}
+          disabled={loading}
+          className="btn-primary w-full text-lg py-4 disabled:opacity-50"
+        >
+          {loading ? 'Setting up...' : '🎯 Start Interview'}
         </button>
       </div>
     </div>

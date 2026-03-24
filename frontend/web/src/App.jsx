@@ -11,12 +11,14 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 
-/* Layouts */
 import AppLayout from './layouts/AppLayout';
 import ImmersiveLayout from './layouts/ImmersiveLayout';
+import ProtectedRoute from './components/ProtectedRoute';
 
-/* Pages */
 import LandingPage from './pages/LandingPage';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import DashboardPage from './pages/DashboardPage';
 import InterviewSetupPage from './pages/InterviewSetupPage';
 import LiveInterviewPage from './pages/LiveInterviewPage';
@@ -32,24 +34,106 @@ import SettingsPage from './pages/SettingsPage';
 export default function App() {
   return (
     <Routes>
-      {/* ── Light-mode pages wrapped in standard app shell ── */}
+      {/* Public routes */}
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+
+      {/* Protected light pages */}
       <Route element={<AppLayout />}>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/setup" element={<InterviewSetupPage />} />
-        <Route path="/results" element={<PerformanceAnalysisPage />} />
-        <Route path="/history" element={<InterviewHistoryPage />} />
-        <Route path="/history/:id" element={<SessionReviewPage />} />
-        <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/resources" element={<LearningResourcesPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/setup"
+          element={
+            <ProtectedRoute>
+              <InterviewSetupPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/results"
+          element={
+            <ProtectedRoute>
+              <PerformanceAnalysisPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/history"
+          element={
+            <ProtectedRoute>
+              <InterviewHistoryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/history/:id"
+          element={
+            <ProtectedRoute>
+              <SessionReviewPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/analytics"
+          element={
+            <ProtectedRoute>
+              <AnalyticsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/resources"
+          element={
+            <ProtectedRoute>
+              <LearningResourcesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
       </Route>
 
-      {/* ── Dark immersive pages ── */}
+      {/* Protected dark immersive pages */}
       <Route element={<ImmersiveLayout />}>
-        <Route path="/interview" element={<LiveInterviewPage />} />
-        <Route path="/processing" element={<AIProcessingPage />} />
-        <Route path="/summary" element={<PracticeSummaryPage />} />
+        <Route
+          path="/interview"
+          element={
+            <ProtectedRoute>
+              <LiveInterviewPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/processing"
+          element={
+            <ProtectedRoute>
+              <AIProcessingPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/summary"
+          element={
+            <ProtectedRoute>
+              <PracticeSummaryPage />
+            </ProtectedRoute>
+          }
+        />
       </Route>
     </Routes>
   );
