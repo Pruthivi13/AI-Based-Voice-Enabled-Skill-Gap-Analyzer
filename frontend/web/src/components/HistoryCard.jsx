@@ -13,12 +13,16 @@
 import React from 'react';
 import StatusChip from './StatusChip';
 import { useTheme } from '../context/ThemeContext';
+import ClockIcon from './ui/clock-icon';
+import ChartBarIcon from './ui/chart-bar-icon';
+
+import { Play, Code, Server, Users, BookOpen } from 'lucide-react';
 
 const categoryIcons = {
-  Technical:    '< >',
-  Backend:      '▷',
-  'Soft Skills':'☺',
-  default:      '◉',
+  Technical:    <Code size={28} />,
+  Backend:      <Server size={28} />,
+  'Soft Skills':<Users size={28} />,
+  default:      <BookOpen size={28} />,
 };
 
 export default function HistoryCard({ session, onView }) {
@@ -53,8 +57,8 @@ export default function HistoryCard({ session, onView }) {
 
         {/* Meta */}
         <div className={`flex items-center gap-3 text-xs mb-2 ${isDark ? 'text-white/50' : 'text-ink-500'}`}>
-          <span>📅 {session.date}</span>
-          <span>⏱ {session.duration}</span>
+          <span className="flex items-center gap-1"><ClockIcon size={14} className="text-current" /> {session.date}</span>
+          <span className="flex items-center gap-1"><ClockIcon size={14} className="text-current" /> {session.duration}</span>
         </div>
 
         {/* Summary */}
@@ -62,11 +66,11 @@ export default function HistoryCard({ session, onView }) {
 
         {/* Actions */}
         <div className="flex items-center gap-3 flex-wrap">
-          <button onClick={onView} className="btn-primary text-sm py-2 px-5">
-            📊 View Detailed Analysis
+          <button onClick={onView} className="btn-primary text-sm py-2 px-5 flex items-center justify-center gap-2">
+            <ChartBarIcon size={16} className="text-current" /> View Detailed Analysis
           </button>
-          <button className="text-sm font-semibold text-primary-500 hover:text-primary-600 transition-colors">
-            ▶ Replay Answer
+          <button className="text-sm font-semibold text-primary-500 hover:text-primary-600 transition-colors flex items-center justify-center">
+            <Play size={14} className="fill-current mr-1" /> Replay Answer
           </button>
         </div>
       </div>

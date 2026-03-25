@@ -4,6 +4,8 @@ import { fetchPracticeSummary, generateAnalysis } from '../services/mockApi';
 import GlassPanel from '../components/GlassPanel';
 import TranscriptPanel from '../components/TranscriptPanel';
 import LoadingState from '../components/LoadingState';
+import ChartBarIcon from '../components/ui/chart-bar-icon';
+import FileDescriptionIcon from '../components/ui/file-description-icon';
 
 export default function PracticeSummaryPage() {
   const navigate = useNavigate();
@@ -95,8 +97,8 @@ export default function PracticeSummaryPage() {
       {summary?.analysis && (
         <div className="grid md:grid-cols-2 gap-4 w-full mb-8">
           <GlassPanel>
-            <h4 className="text-sm font-bold text-green-400 uppercase tracking-wider mb-3">
-              ✅ Feedback
+            <h4 className="text-sm font-bold text-green-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <FileDescriptionIcon size={16} className="text-current" /> Feedback
             </h4>
             <ul className="space-y-2">
               {Array.isArray(summary.analysis.feedback) ? (
@@ -118,8 +120,8 @@ export default function PracticeSummaryPage() {
           </GlassPanel>
 
           <GlassPanel>
-            <h4 className="text-sm font-bold text-amber-400 uppercase tracking-wider mb-3">
-              📊 Scores
+            <h4 className="text-sm font-bold text-amber-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <ChartBarIcon size={16} className="text-current" /> Scores
             </h4>
             <div className="space-y-2 text-sm text-white/80">
               {summary.analysis.clarityScore && (

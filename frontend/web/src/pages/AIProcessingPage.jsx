@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { fetchProcessingStatus, generateAnalysis } from '../services/mockApi';
 import GlassPanel from '../components/GlassPanel';
 import ProgressChecklist from '../components/ProgressChecklist';
+import BrainCircuitIcon from '../components/ui/brain-circuit-icon';
 
 export default function AIProcessingPage() {
   const navigate = useNavigate();
@@ -114,8 +115,8 @@ export default function AIProcessingPage() {
           className="w-24 h-24 rounded-full bg-gradient-to-br from-primary-500/20 to-primary-500/5
                         flex items-center justify-center animate-pulse-slow"
         >
-          <div className="w-16 h-16 rounded-full bg-primary-500/20 flex items-center justify-center">
-            <span className="text-3xl">🧠</span>
+          <div className="w-16 h-16 rounded-full bg-primary-500/20 flex items-center justify-center text-primary-500">
+            <BrainCircuitIcon size={40} className="text-current" />
           </div>
         </div>
         <div className="absolute inset-0 rounded-full border-2 border-primary-500/20 animate-ping" />

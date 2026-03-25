@@ -9,6 +9,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import UserIcon from './ui/user-icon';
+import GearIcon from './ui/gear-icon';
+import LogoutIcon from './ui/logout-icon';
 
 const navLinks = [
   { to: '/dashboard', label: 'Dashboard' },
@@ -148,7 +151,7 @@ export default function Header() {
                         : 'text-ink-700 hover:bg-surface-50 hover:text-ink-900'
                     }`}
                   >
-                    👤 Profile
+                    <UserIcon size={16} className="text-current" /> Profile
                   </button>
                   <button
                     onClick={() => { setIsDropdownOpen(false); navigate('/settings'); }}
@@ -158,7 +161,7 @@ export default function Header() {
                         : 'text-ink-700 hover:bg-surface-50 hover:text-ink-900'
                     }`}
                   >
-                    ⚙️ Settings
+                    <GearIcon size={16} className="text-current" /> Settings
                   </button>
                 </div>
 
@@ -168,7 +171,7 @@ export default function Header() {
                     onClick={handleLogout}
                     className="w-full text-left px-4 py-2.5 text-sm font-medium flex items-center gap-2.5 text-red-500 hover:bg-red-500/10 transition-colors"
                   >
-                    🚪 Logout
+                    <LogoutIcon size={16} className="text-current" /> Logout
                   </button>
                 </div>
               </div>
@@ -235,17 +238,17 @@ export default function Header() {
             {/* Mobile Profile & Logout */}
             <button
               onClick={() => { setIsMenuOpen(false); navigate('/profile'); }}
-              className={`px-4 py-3 rounded-xl text-base font-semibold text-left transition-colors ${
+              className={`px-4 py-3 rounded-xl text-base font-semibold text-left flex items-center gap-2 transition-colors ${
                 isDark ? 'text-white hover:bg-white/10' : 'text-ink-700 hover:bg-surface-100'
               }`}
             >
-              👤 Profile
+              <UserIcon size={18} className="text-current" /> Profile
             </button>
             <button
               onClick={() => { setIsMenuOpen(false); handleLogout(); }}
-              className="px-4 py-3 rounded-xl text-base font-semibold text-left text-red-500 hover:bg-red-500/10 transition-colors"
+              className="px-4 py-3 rounded-xl text-base font-semibold text-left flex items-center gap-2 text-red-500 hover:bg-red-500/10 transition-colors"
             >
-              🚪 Logout
+              <LogoutIcon size={18} className="text-current" /> Logout
             </button>
           </nav>
         </div>

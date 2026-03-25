@@ -9,12 +9,13 @@
  *   title       — Panel title (default: "AI Suggestions")
  */
 import React from 'react';
+import BrainCircuitIcon from './ui/brain-circuit-icon';
 
 export default function FeedbackPanel({ suggestions, title = 'AI Suggestions' }) {
   return (
     <div className="card">
       <h4 className="text-lg font-bold text-ink-900 mb-4 flex items-center gap-2">
-        <span className="text-primary-500">💡</span>
+        <span className="text-primary-500 leading-none"><BrainCircuitIcon size={24} className="text-current" /></span>
         {title}
       </h4>
       <ul className="space-y-3">

@@ -18,6 +18,7 @@ import StatusChip from '../components/StatusChip';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
 import { useTheme } from '../context/ThemeContext';
+import ClockIcon from '../components/ui/clock-icon';
 
 export default function SessionReviewPage() {
   const { id } = useParams();
@@ -69,14 +70,14 @@ export default function SessionReviewPage() {
           <div
             className={`flex items-center gap-3 text-sm mt-1 ${isDark ? 'text-white/50' : 'text-ink-500'}`}
           >
-            <span>
-              📅{' '}
+            <span className="flex items-center gap-1">
+              <ClockIcon size={16} className="text-current" />{' '}
               {review?.session?.date
                 ? new Date(review.session.date).toLocaleDateString()
                 : 'N/A'}
             </span>
             {review?.session?.duration && (
-              <span>⏱ {review.session.duration}s</span>
+              <span className="flex items-center gap-1"><ClockIcon size={16} className="text-current" /> {review.session.duration}s</span>
             )}
           </div>
         </div>

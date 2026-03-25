@@ -9,6 +9,11 @@ import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getCurrentUser } from '../services/mockApi';
+import GearIcon from '../components/ui/gear-icon';
+import FileDescriptionIcon from '../components/ui/file-description-icon';
+import ChartBarIcon from '../components/ui/chart-bar-icon';
+import LogoutIcon from '../components/ui/logout-icon';
+import { CheckCircle2, AlertCircle } from 'lucide-react';
 
 export default function ProfilePage() {
   const navigate = useNavigate();
@@ -85,21 +90,21 @@ export default function ProfilePage() {
           <p className={subTextClass}>{currentUser?.email}</p>
           {currentUser?.emailVerified && (
             <span className="inline-flex items-center gap-1 mt-2 px-3 py-1 rounded-full text-xs font-semibold bg-green-500/10 text-green-500">
-              ✓ Email Verified
+              <CheckCircle2 size={14} /> Email Verified
             </span>
           )}
           {currentUser && !currentUser.emailVerified && (
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-yellow-500/10 text-yellow-600">
-                ⚠ Email Not Verified
+                <AlertCircle size={14} /> Email Not Verified
               </span>
               <button
                 onClick={async () => {
                   try {
                     await resendVerification();
-                    setVerifyMsg('✅ Verification email sent! Check your inbox.');
+                    setVerifyMsg('Verification email sent! Check your inbox.');
                   } catch (err) {
-                    setVerifyMsg('❌ Failed to send. Try again later.');
+                    setVerifyMsg('Failed to send. Try again later.');
                   }
                 }}
                 className="px-3 py-1 rounded-full text-xs font-semibold bg-primary-500/10 text-primary-500 hover:bg-primary-500/20 transition-colors"
@@ -109,8 +114,8 @@ export default function ProfilePage() {
             </div>
           )}
           {verifyMsg && (
-            <p className={`text-xs mt-2 ${verifyMsg.startsWith('✅') ? 'text-green-500' : 'text-red-500'}`}>
-              {verifyMsg}
+            <p className={`text-xs mt-2 flex items-center justify-center sm:justify-start gap-1 ${verifyMsg.startsWith('Verification') ? 'text-green-500' : 'text-red-500'}`}>
+              {verifyMsg.startsWith('Verification') ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />} {verifyMsg}
             </p>
           )}
         </div>
@@ -165,7 +170,7 @@ export default function ProfilePage() {
               isDark ? 'hover:bg-white/5' : 'hover:bg-surface-50'
             }`}
           >
-            <span className="text-2xl mb-2 block">⚙️</span>
+            <span className="text-2xl mb-2 flex justify-start"><GearIcon size={28} className="text-primary-500" /></span>
             <p className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-ink-900'}`}>Settings</p>
             <p className={`text-xs mt-1 ${subTextClass}`}>Theme, preferences</p>
           </button>
@@ -175,7 +180,7 @@ export default function ProfilePage() {
               isDark ? 'hover:bg-white/5' : 'hover:bg-surface-50'
             }`}
           >
-            <span className="text-2xl mb-2 block">📋</span>
+            <span className="text-2xl mb-2 flex justify-start"><FileDescriptionIcon size={28} className="text-primary-500" /></span>
             <p className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-ink-900'}`}>Interview History</p>
             <p className={`text-xs mt-1 ${subTextClass}`}>Past sessions</p>
           </button>
@@ -185,7 +190,7 @@ export default function ProfilePage() {
               isDark ? 'hover:bg-white/5' : 'hover:bg-surface-50'
             }`}
           >
-            <span className="text-2xl mb-2 block">📊</span>
+            <span className="text-2xl mb-2 flex justify-start"><ChartBarIcon size={28} className="text-primary-500" /></span>
             <p className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-ink-900'}`}>Analytics</p>
             <p className={`text-xs mt-1 ${subTextClass}`}>Performance insights</p>
           </button>
@@ -202,9 +207,9 @@ export default function ProfilePage() {
         </div>
         <button
           onClick={handleLogout}
-          className="px-6 py-3 rounded-xl text-sm font-semibold bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors whitespace-nowrap"
+          className="px-6 py-3 rounded-xl text-sm font-semibold bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors whitespace-nowrap flex items-center gap-2"
         >
-          🚪 Logout
+          <LogoutIcon size={18} className="text-current" /> Logout
         </button>
       </div>
     </div>

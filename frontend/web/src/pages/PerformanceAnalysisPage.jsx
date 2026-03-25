@@ -23,6 +23,8 @@ import FeedbackPanel from '../components/FeedbackPanel';
 import StatusChip from '../components/StatusChip';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
+import RefreshIcon from '../components/ui/refresh-icon';
+import SaveIcon from '../components/ui/save-icon';
 
 export default function PerformanceAnalysisPage() {
   const navigate = useNavigate();
@@ -181,15 +183,15 @@ export default function PerformanceAnalysisPage() {
       <section className="flex flex-wrap gap-4 justify-center">
         <button
           onClick={() => navigate('/setup')}
-          className="btn-secondary px-8"
+          className="btn-secondary px-8 flex items-center gap-2"
         >
-          🔄 Practice Again
+          <RefreshIcon size={18} className="text-current" /> Practice Again
         </button>
         <button
           onClick={() => navigate('/history')}
-          className="btn-primary px-8"
+          className="btn-primary px-8 flex items-center gap-2"
         >
-          💾 View History
+          <SaveIcon size={18} className="text-current" /> View History
         </button>
       </section>
     </div>

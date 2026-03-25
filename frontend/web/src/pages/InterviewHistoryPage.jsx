@@ -18,6 +18,11 @@ import HistoryCard from '../components/HistoryCard';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
 import { useTheme } from '../context/ThemeContext';
+import ClockIcon from '../components/ui/clock-icon';
+import TargetIcon from '../components/ui/target-icon';
+import ChartBarIcon from '../components/ui/chart-bar-icon';
+import FileDescriptionIcon from '../components/ui/file-description-icon';
+import MailFilledIcon from '../components/ui/mail-filled-icon';
 
 const filterTabs = ['All', 'TECHNICAL', 'HR', 'COMMUNICATION', 'MIXED'];
 
@@ -95,12 +100,12 @@ export default function InterviewHistoryPage() {
                   <div
                     className={`flex items-center gap-3 text-xs mb-2 ${isDark ? 'text-white/50' : 'text-ink-500'}`}
                   >
-                    <span>
-                      📅 {new Date(session.startedAt).toLocaleDateString()}
+                    <span className="flex items-center gap-1">
+                      <ClockIcon size={14} className="text-current" /> {new Date(session.startedAt).toLocaleDateString()}
                     </span>
-                    <span>🎯 {session.targetRole}</span>
-                    <span>📊 {session.difficulty}</span>
-                    <span>❓ {session.questionCount} questions</span>
+                    <span className="flex items-center gap-1"><TargetIcon size={14} className="text-current" /> {session.targetRole}</span>
+                    <span className="flex items-center gap-1"><ChartBarIcon size={14} className="text-current" /> {session.difficulty}</span>
+                    <span className="flex items-center gap-1"><FileDescriptionIcon size={14} className="text-current" /> {session.questionCount} questions</span>
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0">
@@ -120,9 +125,9 @@ export default function InterviewHistoryPage() {
                     sessionStorage.setItem('currentSessionId', session.id);
                     navigate(`/history/${session.id}`);
                   }}
-                  className="btn-primary text-sm py-2 px-5"
+                  className="btn-primary text-sm py-2 px-5 flex items-center justify-center gap-2"
                 >
-                  📊 View Analysis
+                  <ChartBarIcon size={16} className="text-current" /> View Analysis
                 </button>
               </div>
             </div>
@@ -130,7 +135,7 @@ export default function InterviewHistoryPage() {
         </div>
       ) : (
         <EmptyState
-          icon="📭"
+          icon={<MailFilledIcon size={48} className="text-current mx-auto" />}
           title="No sessions found"
           message="No interview sessions yet. Start your first practice!"
           action={{

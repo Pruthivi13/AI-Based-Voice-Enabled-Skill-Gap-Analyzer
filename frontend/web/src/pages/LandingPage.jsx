@@ -13,9 +13,15 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
+import { Play } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import LandingHero from '../components/LandingHero';
 import LandingBackdrop from '../components/LandingBackdrop';
+import TargetIcon from '../components/ui/target-icon';
+import FileDescriptionIcon from '../components/ui/file-description-icon';
+import BookIcon from '../components/ui/book-icon';
+import UserIcon from '../components/ui/user-icon';
+import GearIcon from '../components/ui/gear-icon';
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -33,7 +39,7 @@ export default function LandingPage() {
             className="flex items-center gap-2 cursor-pointer"
             onClick={() => navigate('/')}
           >
-            <span className="text-2xl">🎯</span>
+            <span className="text-2xl flex items-center justify-center"><TargetIcon size={28} className="text-current" /></span>
             <span className="text-lg font-bold text-white">AI Interview Assistant</span>
           </div>
           <div className="flex items-center gap-3">
@@ -112,7 +118,7 @@ export default function LandingPage() {
                 <div>
                   <p className="section-header">Document</p>
                   <p className={`text-sm font-semibold flex items-center gap-1 ${isDark ? 'text-white/80' : 'text-ink-900'}`}>
-                    📄 job-spec-v2.pdf
+                    <FileDescriptionIcon size={16} className="text-current opacity-80" /> job-spec-v2.pdf
                   </p>
                 </div>
               </div>
@@ -129,14 +135,14 @@ export default function LandingPage() {
 
         {/* ── Action Buttons ── */}
         <section className="flex flex-wrap items-center justify-center gap-4 mb-16">
-          <button onClick={() => navigate(currentUser ? '/setup' : '/login')} className="btn-primary text-lg px-8 py-4">
-            ▶ Start Interview
+          <button onClick={() => navigate(currentUser ? '/setup' : '/login')} className="btn-primary text-lg px-8 py-4 flex items-center gap-2">
+            <Play size={20} className="fill-current" /> Start Interview
           </button>
-          <button onClick={() => navigate(currentUser ? '/resources' : '/login')} className="btn-secondary text-lg px-8 py-4">
-            📖 Explore Resources
+          <button onClick={() => navigate(currentUser ? '/resources' : '/login')} className="btn-secondary text-lg px-8 py-4 flex items-center gap-2">
+            <BookIcon size={20} className="text-current" /> Explore Resources
           </button>
-          <button onClick={() => navigate(currentUser ? '/history' : '/login')} className="btn-secondary text-lg px-8 py-4">
-            📋 Past Reviews
+          <button onClick={() => navigate(currentUser ? '/history' : '/login')} className="btn-secondary text-lg px-8 py-4 flex items-center gap-2">
+            <FileDescriptionIcon size={20} className="text-current" /> Past Reviews
           </button>
         </section>
 
@@ -145,17 +151,17 @@ export default function LandingPage() {
         <section className="relative grid md:grid-cols-3 gap-6 max-w-4xl mx-auto mt-24">
           {[
             {
-              icon: '🎙️',
+              icon: <UserIcon size={28} className="text-primary-500" />,
               title: 'Voice Analysis',
               desc: 'Analyze tone, pace, and filler words in real-time.',
             },
             {
-              icon: '📹',
+              icon: <TargetIcon size={28} className="text-primary-500" />,
               title: 'Body Language',
               desc: 'Track eye contact and facial expressions for impact.',
             },
             {
-              icon: '💻',
+              icon: <GearIcon size={28} className="text-primary-500" />,
               title: 'Technical Depth',
               desc: 'Verify accuracy of technical answers for devs.',
             },

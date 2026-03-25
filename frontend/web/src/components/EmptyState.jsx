@@ -8,8 +8,9 @@
  *   action  — Optional { label, onClick } for a CTA button
  */
 import React from 'react';
+import MailFilledIcon from './ui/mail-filled-icon';
 
-export default function EmptyState({ icon = '📭', title, message, action }) {
+export default function EmptyState({ icon = <MailFilledIcon size={48} className="text-current opacity-50" />, title, message, action }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
       <span className="text-5xl mb-4">{icon}</span>

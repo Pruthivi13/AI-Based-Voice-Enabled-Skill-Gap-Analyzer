@@ -17,6 +17,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { fetchSettings, updateSettings } from '../services/mockApi';
 import LoadingState from '../components/LoadingState';
+import { CheckCircle2 } from 'lucide-react';
 
 const ROLES = [
   'Frontend Developer',
@@ -211,8 +212,8 @@ export default function SettingsPage() {
 
         {/* Save */}
         {saved && (
-          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm text-center">
-            ✅ Settings saved successfully!
+          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm flex items-center justify-center gap-2">
+            <CheckCircle2 size={18} /> Settings saved successfully!
           </div>
         )}
         <button

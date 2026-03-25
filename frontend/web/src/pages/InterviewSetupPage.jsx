@@ -17,6 +17,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createInterviewSession } from '../services/mockApi';
+import FileDescriptionIcon from '../components/ui/file-description-icon';
+import TargetIcon from '../components/ui/target-icon';
 
 const roles = [
   'Frontend Developer',
@@ -219,8 +221,8 @@ export default function InterviewSetupPage() {
               id="jd-upload"
             />
             <label htmlFor="jd-upload" className="cursor-pointer">
-              <p className="text-ink-500 text-sm mb-1">
-                {fileName ? `📄 ${fileName}` : 'Click to upload or drag & drop'}
+              <p className="text-ink-500 text-sm mb-1 flex items-center justify-center gap-1">
+                {fileName ? <><FileDescriptionIcon size={16} className="text-current opacity-80" /> {fileName}</> : 'Click to upload or drag & drop'}
               </p>
               <p className="text-xs text-ink-500/60">PDF, DOC, DOCX, or TXT</p>
             </label>
@@ -231,9 +233,9 @@ export default function InterviewSetupPage() {
         <button
           onClick={handleStart}
           disabled={loading}
-          className="btn-primary w-full text-lg py-4 disabled:opacity-50"
+          className="btn-primary w-full text-lg py-4 disabled:opacity-50 flex items-center justify-center gap-2"
         >
-          {loading ? 'Setting up...' : '🎯 Start Interview'}
+          {loading ? 'Setting up...' : <><TargetIcon size={20} className="text-current" /> Start Interview</>}
         </button>
       </div>
     </div>
