@@ -1,4 +1,4 @@
-import whisper
+from faster_whisper import WhisperModel
 import tempfile
 import os
 import httpx
@@ -12,9 +12,10 @@ model = None
 def get_model():
     global model
     if model is None:
-        logger.info("Loading Whisper model...")
-        model = whisper.load_model("base")
-        logger.info("Whisper model loaded!")
+        logger.info("Loading faster-whisper model...")
+        # int8 = faster on CPU, less memory
+        model = WhisperModel("base", device="cpu", compute_type="int8")
+        logger.info("faster-whisper model loaded!")
     return model
 
 async def transcribe_audio(audio_url: str) -> str:
@@ -50,24 +51,32 @@ async def transcribe_audio(audio_url: str) -> str:
             timeout=30
         )
 
-        logger.info(f"ffmpeg return code: {result.returncode}")
-        if result.stderr:
-            logger.info(f"ffmpeg stderr: {result.stderr[-500:]}")
-
         if result.returncode != 0:
-            raise Exception(f"ffmpeg conversion failed with code {result.returncode}: {result.stderr[-200:]}")
+            raise Exception(f"ffmpeg failed: {result.stderr[-200:]}")
 
         if not os.path.exists(wav_path) or os.path.getsize(wav_path) < 100:
-            raise Exception(f"WAV file not created or too small")
+            raise Exception("WAV file not created or too small")
 
         logger.info(f"WAV file size: {os.path.getsize(wav_path)} bytes")
-        logger.info("Running Whisper...")
+        logger.info("Running faster-whisper...")
 
         whisper_model = get_model()
-        whisper_result = whisper_model.transcribe(wav_path)
-        transcript = whisper_result["text"].strip()
+
+        # faster-whisper returns segments (generator) + info
+        segments, info = whisper_model.transcribe(
+            wav_path,
+            beam_size=1,          # faster, slightly less accurate
+            language="en",        # skip language detection, saves time
+            vad_filter=True,      # skip silent parts automatically
+            vad_parameters=dict(min_silence_duration_ms=500)
+        )
+
+        # Join all segments into one transcript
+        transcript = " ".join(segment.text.strip() for segment in segments)
 
         logger.info(f"Transcription complete: {transcript[:100]}")
+        logger.info(f"Detected language: {info.language} (probability: {info.language_probability:.2f})")
+
         return transcript if transcript else "No speech detected"
 
     except Exception as e:
