@@ -229,7 +229,8 @@ export const getCurrentUser = () => request('GET', '/users/me');
 export const updateCurrentUser = (data) => request('PUT', '/users/me', data);
 
 // ── Sessions ──
-export const createInterviewSession = (payload) => request('POST', '/sessions', payload);
+export const createInterviewSession = (payload) =>
+  request('POST', '/sessions', payload);
 
 export const fetchInterviewHistory = (page = 1, limit = 10) =>
   request('GET', `/sessions?page=${page}&limit=${limit}`);
@@ -298,3 +299,20 @@ export const fetchResources = () => request('GET', '/resources');
 // ── Settings ──
 export const fetchSettings = () => request('GET', '/settings');
 export const updateSettings = (data) => request('PUT', '/settings', data);
+
+// ── Retry ──
+export const retryQuestion = (sessionId, questionId) =>
+  request('POST', `/sessions/${sessionId}/questions/${questionId}/retry`);
+
+export const saveTranscript = (
+  sessionId,
+  questionId,
+  transcript,
+  answerOrder,
+  durationSeconds
+) =>
+  request('POST', `/sessions/${sessionId}/questions/${questionId}/transcript`, {
+    transcript,
+    answerOrder,
+    durationSeconds,
+  });

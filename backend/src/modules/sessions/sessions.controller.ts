@@ -84,3 +84,21 @@ export const finishSession = async (
     next(err);
   }
 };
+
+export const retryQuestion = async (
+  req: any,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { retryQuestion: retryService } = await import('./retry.service');
+    const result = await retryService(
+      req.user.id,
+      req.params.id,
+      req.params.qid
+    );
+    return sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+};

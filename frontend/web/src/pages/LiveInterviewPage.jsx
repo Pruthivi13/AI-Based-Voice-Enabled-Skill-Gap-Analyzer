@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { finishSession } from '../services/mockApi';
+import { finishSession, saveTranscript } from '../services/mockApi';
 import QuestionCard from '../components/QuestionCard';
 import TranscriptPanel from '../components/TranscriptPanel';
 import RecordingControls from '../components/RecordingControls';
@@ -18,11 +18,27 @@ export default function LiveInterviewPage() {
   const [isPaused, setIsPaused] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [status, setStatus] = useState('Ready');
+  const [timeLeft, setTimeLeft] = useState(null);
 
+  const timerRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const wsRef = useRef(null);
   const streamRef = useRef(null);
   const currentIndexRef = useRef(0);
+
+  const startTimer = useCallback((seconds) => {
+    setTimeLeft(seconds);
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          handleStop(); // auto-stop when time runs out
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []); // Note: handleStop is actually not in the dependency array here, but it's defined below. We will handle dependency correctly by hoisting or using ref, or since handleStop uses useCallback with [] it's fine. Wait, handleStop is defined below. Actually, I can just define startTimer/stopTimer here and it will work if I use handleStop from scope. Wait, React hooks order. Let's see. Let's look at how handleStop is implemented.
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -36,6 +52,7 @@ export default function LiveInterviewPage() {
     return () => {
       wsRef.current?.close();
       streamRef.current?.getTracks().forEach((t) => t.stop());
+      clearInterval(timerRef.current);
     };
   }, []);
 
@@ -85,6 +102,7 @@ export default function LiveInterviewPage() {
         }
 
         if (msg.type === 'final') {
+          stopTimer();
           setTranscript(msg.text);
           setStatus('Ready');
           setIsRecording(false);
@@ -92,6 +110,14 @@ export default function LiveInterviewPage() {
 
           // Use ref to avoid stale closure
           const idx = currentIndexRef.current;
+          const questionId = questions[idx]?.id;
+
+          // ← Save transcript to DB
+          try {
+            await saveTranscript(sessionId, questionId, msg.text, idx + 1);
+          } catch (err) {
+            console.error('Failed to save transcript:', err);
+          }
 
           if (idx < questions.length - 1) {
             // Move to next question
@@ -142,6 +168,7 @@ export default function LiveInterviewPage() {
       };
 
       mediaRecorder.start(200); // chunk every 200ms
+      startTimer(questions[currentIndexRef.current]?.timeLimitSeconds || 120);
       setIsRecording(true);
       setIsPaused(false);
       setTranscript('Listening...');
@@ -160,6 +187,7 @@ export default function LiveInterviewPage() {
 
   const handleStop = useCallback(() => {
     if (!mediaRecorderRef.current) return;
+    stopTimer();
 
     mediaRecorderRef.current.stop();
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -196,6 +224,22 @@ export default function LiveInterviewPage() {
           {status}
         </span>
       </div>
+
+      {/* Timer */}
+      {timeLeft !== null && (
+        <div className={`self-end mb-2 flex items-center gap-2 text-sm font-bold tabular-nums ${
+          timeLeft <= 10
+            ? 'text-red-400'
+            : timeLeft <= 30
+            ? 'text-amber-400'
+            : 'text-white/50'
+        }`}>
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+          </svg>
+          {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
+        </div>
+      )}
 
       {/* Question Card */}
       <div className="w-full mb-8">
