@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { uploadAudio, getTranscript } from './uploads.controller';
+import {
+  uploadAudio,
+  getTranscript,
+  saveTranscriptHandler,
+} from './uploads.controller';
 import { authMiddleware } from '../../middleware/auth.middleware';
 import { strictRateLimit } from '../../middleware/rateLimit.middleware';
 
@@ -20,6 +24,12 @@ router.get(
   '/sessions/:id/questions/:qid/transcript',
   authMiddleware,
   getTranscript
+);
+
+router.post(
+  '/sessions/:id/questions/:qid/transcript',
+  authMiddleware,
+  saveTranscriptHandler
 );
 
 export default router;

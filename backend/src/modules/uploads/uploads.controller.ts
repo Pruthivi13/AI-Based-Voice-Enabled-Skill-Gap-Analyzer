@@ -78,3 +78,25 @@ export const getTranscript = async (
     next(err);
   }
 };
+
+export const saveTranscriptHandler = async (
+  req: any,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { saveTranscript } = await import('./saveTranscript');
+    const { transcript, answerOrder, durationSeconds } = req.body;
+    const result = await saveTranscript(
+      req.user.id,
+      req.params.id,
+      req.params.qid,
+      transcript || '',
+      answerOrder || 1,
+      durationSeconds
+    );
+    return sendSuccess(res, result, 201);
+  } catch (err) {
+    next(err);
+  }
+};

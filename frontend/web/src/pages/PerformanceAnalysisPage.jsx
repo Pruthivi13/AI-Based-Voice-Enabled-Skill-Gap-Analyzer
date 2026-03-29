@@ -16,7 +16,11 @@
  */
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchReport, fetchSessionReview } from '../services/mockApi';
+import {
+  fetchReport,
+  fetchSessionReview,
+  retryQuestion,
+} from '../services/mockApi';
 import RadarChart from '../components/RadarChart';
 import ScoreCard from '../components/ScoreCard';
 import FeedbackPanel from '../components/FeedbackPanel';
@@ -165,13 +169,35 @@ export default function PerformanceAnalysisPage() {
                     </p>
                   )}
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-xl font-extrabold text-ink-900">
-                    {q.score ?? 'N/A'}
-                  </p>
-                  <p className="text-[10px] uppercase tracking-wider text-ink-500 font-bold">
-                    Score
-                  </p>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <div className="text-right">
+                    <p className="text-xl font-extrabold text-ink-900">
+                      {q.score ?? 'N/A'}
+                    </p>
+                    <p className="text-[10px] uppercase tracking-wider text-ink-500 font-bold">
+                      Score
+                    </p>
+                  </div>
+                  {/* Retry button */}
+                  <button
+                    onClick={async () => {
+                      try {
+                        const result = await retryQuestion(sessionId, q.id);
+                        // Save single question to sessionStorage and go to interview
+                        sessionStorage.setItem('currentSessionId', sessionId);
+                        sessionStorage.setItem(
+                          'currentQuestions',
+                          JSON.stringify([result.question])
+                        );
+                        navigate('/interview');
+                      } catch (err) {
+                        console.error('Retry failed:', err);
+                      }
+                    }}
+                    className="btn-secondary text-xs py-1.5 px-3"
+                  >
+                    🔄 Retry
+                  </button>
                 </div>
               </div>
             ))}
