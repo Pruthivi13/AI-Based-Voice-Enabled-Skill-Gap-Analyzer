@@ -1,5 +1,7 @@
 import prisma from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
+import { generateQuestionsFromAI } from '../../services/questionGenerator.service';
+import { logger } from '../../utils/logger';
 
 export const createSession = async (userId: string, data: any) => {
   const {
@@ -11,31 +13,42 @@ export const createSession = async (userId: string, data: any) => {
     jobDescription,
   } = data;
 
-  // Pick random questions based on type and difficulty
-  const category =
-    interviewType === 'TECHNICAL'
-      ? 'TECHNICAL'
-      : interviewType === 'HR'
-        ? 'HR'
-        : interviewType === 'COMMUNICATION'
-          ? 'COMMUNICATION'
-          : undefined;
+  let questions;
 
-  const questions = await prisma.question.findMany({
-    where: {
-      isActive: true,
-      difficulty,
-      ...(category && { category }),
-    },
-    take: questionCount,
-  });
-
-  if (questions.length === 0) {
-    throw new ApiError(
-      'NO_QUESTIONS',
-      'No questions found for this configuration.',
-      404
+  try {
+    // 🚀 Try AI first (NO retry, clean & fast)
+    questions = await generateQuestionsFromAI(
+      targetRole,
+      experienceLevel || 'JUNIOR',
+      interviewType,
+      questionCount
     );
+  } catch (err) {
+    // 🛟 Fallback to DB if AI fails
+    logger.warn('AI generation failed, falling back to DB questions');
+
+    const category =
+      interviewType === 'TECHNICAL'
+        ? 'TECHNICAL'
+        : interviewType === 'HR'
+          ? 'HR'
+          : interviewType === 'COMMUNICATION'
+            ? 'COMMUNICATION'
+            : undefined;
+
+    questions = await prisma.question.findMany({
+      where: {
+        isActive: true,
+        difficulty,
+        ...(category && { category }),
+      },
+      take: questionCount,
+    });
+  }
+
+  // ❌ No questions at all
+  if (!questions || questions.length === 0) {
+    throw new ApiError('NO_QUESTIONS', 'No questions found.', 404);
   }
 
   const session = await prisma.interviewSession.create({
@@ -53,6 +66,8 @@ export const createSession = async (userId: string, data: any) => {
 
   return { sessionId: session.id, status: session.status, questions };
 };
+
+// ─────────────────────────────────────────
 
 export const getSessions = async (userId: string, page = 1, limit = 10) => {
   const skip = (page - 1) * limit;
