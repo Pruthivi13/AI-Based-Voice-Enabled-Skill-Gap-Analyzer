@@ -1,35 +1,18 @@
-/**
- * InterviewSetupPage.jsx — Interview configuration page
- *
- * Maps to PRD §9.2 and the Interview Setup flow.
- * Features:
- *   • Role selection dropdown
- *   • Experience level picker
- *   • Interview type selector
- *   • Question count and difficulty
- *   • Job description upload UI placeholder
- *   • Start Interview CTA
- *
- * TODO: Connect to createInterviewSession() when backend is ready.
- * All form values are local state; they will be sent to the backend
- * when the user clicks "Start Interview".
- */
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createInterviewSession } from '../services/mockApi';
-import FileDescriptionIcon from '../components/ui/file-description-icon';
-import TargetIcon from '../components/ui/target-icon';
 
-const roles = [
+const QUICK_ROLES = [
   'Frontend Developer',
   'Backend Developer',
-  'Full Stack Developer',
   'Data Scientist',
-  'DevOps Engineer',
   'Product Manager',
-  'UI/UX Designer',
-  'Mobile Developer',
-  'QA Engineer',
+  'DevOps Engineer',
+  'Nurse',
+  'iOS Developer',
+  'Cybersecurity Analyst',
+  'Game Designer',
+  'Marketing Manager',
 ];
 
 const experienceLevels = [
@@ -44,12 +27,12 @@ const experienceMap = {
   'Mid (3-5 yrs)': 'MID',
   'Senior (5+ yrs)': 'SENIOR',
 };
-const interviewTypes = ['Technical', 'Behavioral', 'Mixed', 'System Design'];
+const interviewTypes = ['Technical', 'Behavioral', 'Mixed', 'Communication'];
 const interviewTypeMap = {
   Technical: 'TECHNICAL',
   Behavioral: 'HR',
   Mixed: 'MIXED',
-  'System Design': 'TECHNICAL',
+  Communication: 'COMMUNICATION',
 };
 const difficulties = ['Easy', 'Medium', 'Hard'];
 const difficultyMap = {
@@ -62,35 +45,31 @@ const questionCounts = [3, 5, 7, 10];
 export default function InterviewSetupPage() {
   const navigate = useNavigate();
 
-  const [role, setRole] = useState('Frontend Developer');
+  const [role, setRole] = useState('');
   const [experience, setExperience] = useState('Entry Level');
   const [type, setType] = useState('Technical');
   const [questionCount, setQuestionCount] = useState(5);
   const [difficulty, setDifficulty] = useState('Medium');
-  const [fileName, setFileName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) setFileName(file.name);
-  };
-
   const handleStart = async () => {
+    if (!role.trim()) {
+      setError('Please enter a target role.');
+      return;
+    }
     setError('');
     setLoading(true);
     try {
       const payload = {
         interviewType: interviewTypeMap[type],
-        targetRole: role,
+        targetRole: role.trim(),
         difficulty: difficultyMap[difficulty],
         experienceLevel: experienceMap[experience],
         questionCount: Number(questionCount),
       };
       console.log('Sending payload:', payload);
       const result = await createInterviewSession(payload);
-      
-      // Save sessionId and questions to sessionStorage for interview page
       sessionStorage.setItem('currentSessionId', result.sessionId);
       sessionStorage.setItem(
         'currentQuestions',
@@ -108,8 +87,7 @@ export default function InterviewSetupPage() {
     <div className="max-w-3xl mx-auto px-6 py-10">
       <h1 className="mb-2">Interview Setup</h1>
       <p className="text-ink-500 mb-10">
-        Configure your practice session. Select your target role, experience,
-        and preferences.
+        Type any role and our AI will generate questions specific to it.
       </p>
 
       <div className="card space-y-6">
@@ -119,18 +97,33 @@ export default function InterviewSetupPage() {
           </div>
         )}
 
-        {/* Role */}
+        {/* Role — free text input */}
         <div>
           <label className="section-header">Target Role</label>
-          <select
+          <input
+            type="text"
             value={role}
             onChange={(e) => setRole(e.target.value)}
-            className="w-full mt-1 px-4 py-3 rounded-xl bg-surface-100 border border-surface-200 text-ink-900 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            {roles.map((r) => (
-              <option key={r}>{r}</option>
+            placeholder="e.g. Nurse, Data Scientist, iOS Developer..."
+            className="w-full mt-1 px-4 py-3 rounded-xl bg-surface-100 border border-surface-200 text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+          {/* Quick role suggestions */}
+          <div className="flex flex-wrap gap-2 mt-3">
+            {QUICK_ROLES.map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setRole(r)}
+                className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                  role === r
+                    ? 'bg-primary-500 text-white border-primary-500'
+                    : 'border-surface-200 text-ink-500 hover:border-primary-300 hover:text-primary-500'
+                }`}
+              >
+                {r}
+              </button>
             ))}
-          </select>
+          </div>
         </div>
 
         {/* Experience Level */}
@@ -209,33 +202,19 @@ export default function InterviewSetupPage() {
           </div>
         </div>
 
-        {/* JD Upload */}
-        <div>
-          <label className="section-header">Job Description (Optional)</label>
-          <div className="mt-2 p-6 border-2 border-dashed border-surface-200 rounded-2xl text-center hover:border-primary-300 transition-colors cursor-pointer">
-            <input
-              type="file"
-              accept=".pdf,.doc,.docx,.txt"
-              onChange={handleFileChange}
-              className="hidden"
-              id="jd-upload"
-            />
-            <label htmlFor="jd-upload" className="cursor-pointer">
-              <p className="text-ink-500 text-sm mb-1 flex items-center justify-center gap-1">
-                {fileName ? <><FileDescriptionIcon size={16} className="text-current opacity-80" /> {fileName}</> : 'Click to upload or drag & drop'}
-              </p>
-              <p className="text-xs text-ink-500/60">PDF, DOC, DOCX, or TXT</p>
-            </label>
-          </div>
+        {/* AI Notice */}
+        <div className="bg-primary-50 border border-primary-100 rounded-xl px-4 py-3 text-sm text-primary-700">
+          🤖 Questions will be generated by AI specifically for{' '}
+          <strong>{role || 'your role'}</strong> — no generic questions.
         </div>
 
         {/* Start Button */}
         <button
           onClick={handleStart}
-          disabled={loading}
-          className="btn-primary w-full text-lg py-4 disabled:opacity-50 flex items-center justify-center gap-2"
+          disabled={loading || !role.trim()}
+          className="btn-primary w-full text-lg py-4 disabled:opacity-50"
         >
-          {loading ? 'Setting up...' : <><TargetIcon size={20} className="text-current" /> Start Interview</>}
+          {loading ? '🤖 Generating questions...' : '🎯 Start Interview'}
         </button>
       </div>
     </div>

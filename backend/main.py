@@ -11,6 +11,8 @@ from utils.logger import setup_logger
 
 app = FastAPI(title="AI Voice Skill Gap Analyzer - ML Service")
 
+logger = setup_logger(__name__)
+
 # ── Request Models ──
 
 class TranscribeRequest(BaseModel):
@@ -24,6 +26,13 @@ class AnalyzeRequest(BaseModel):
 class ReportRequest(BaseModel):
     sessionId: str
 
+class GenerateQuestionsRequest(BaseModel):
+    targetRole: str
+    experienceLevel: str
+    interviewType: str
+    questionCount: int = 5
+
+
 # ── Health Check ──
 
 @app.get("/")
@@ -33,6 +42,7 @@ def read_root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
 
 # ── Internal Endpoints ──
 
@@ -49,6 +59,7 @@ async def transcribe(request: TranscribeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/internal/analyze-response")
 async def analyze_response(request: AnalyzeRequest):
     from backend.services.analyzer import analyze_transcript
@@ -61,6 +72,7 @@ async def analyze_response(request: AnalyzeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/internal/generate-report")
 async def generate_report(request: ReportRequest):
     from backend.services.report import generate_session_report
@@ -70,31 +82,53 @@ async def generate_report(request: ReportRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ✅ FIXED: Groq sync wrapped in executor
+@app.post("/internal/generate-questions")
+async def generate_questions_endpoint(request: GenerateQuestionsRequest):
+    from backend.services.question_generator import generate_questions
+    try:
+        loop = asyncio.get_event_loop()
+
+        questions = await loop.run_in_executor(
+            None,
+            lambda: generate_questions(
+                target_role=request.targetRole,
+                experience_level=request.experienceLevel,
+                interview_type=request.interviewType,
+                question_count=request.questionCount
+            )
+        )
+
+        return {"questions": questions, "success": True}
+
+    except Exception as e:
+        logger.error(f"Generate questions error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── WebSocket Transcription ──
 
 @app.websocket("/ws/transcribe/{response_id}")
 async def websocket_transcribe(websocket: WebSocket, response_id: str):
     await websocket.accept()
-    logger = setup_logger("websocket")
-    logger.info(f"WebSocket connected for response: {response_id}")
+    logger_ws = setup_logger("websocket")
+    logger_ws.info(f"WebSocket connected for response: {response_id}")
 
     audio_chunks = []
     chunk_count = 0
 
     try:
         while True:
-            # Receive data from frontend
             data = await websocket.receive_bytes()
 
-            # Frontend sends "END" string as bytes when recording stops
             if data == b"END":
-                logger.info("Received END signal — running final transcription")
+                logger_ws.info("Received END signal — running final transcription")
                 break
 
             audio_chunks.append(data)
             chunk_count += 1
 
-            # Run partial transcription every 5 chunks (~1 second of audio)
             if chunk_count % 5 == 0:
                 try:
                     partial_text = await run_transcription(audio_chunks, partial=True)
@@ -103,12 +137,9 @@ async def websocket_transcribe(websocket: WebSocket, response_id: str):
                             "type": "partial",
                             "text": partial_text
                         }))
-                        logger.info(f"Sent partial transcript: {partial_text[:60]}")
                 except Exception as e:
-                    logger.error(f"Partial transcription error: {e}")
-                    # Don't break — keep collecting chunks
+                    logger_ws.error(f"Partial transcription error: {e}")
 
-        # Final transcription on complete audio
         if audio_chunks:
             final_text = await run_transcription(audio_chunks, partial=False)
             await websocket.send_text(json.dumps({
@@ -116,7 +147,6 @@ async def websocket_transcribe(websocket: WebSocket, response_id: str):
                 "text": final_text,
                 "responseId": response_id
             }))
-            logger.info(f"Sent final transcript: {final_text[:100]}")
         else:
             await websocket.send_text(json.dumps({
                 "type": "final",
@@ -125,9 +155,9 @@ async def websocket_transcribe(websocket: WebSocket, response_id: str):
             }))
 
     except WebSocketDisconnect:
-        logger.info(f"WebSocket disconnected for response: {response_id}")
+        logger_ws.info(f"WebSocket disconnected for response: {response_id}")
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger_ws.error(f"WebSocket error: {e}")
         try:
             await websocket.send_text(json.dumps({
                 "type": "error",
@@ -136,16 +166,10 @@ async def websocket_transcribe(websocket: WebSocket, response_id: str):
         except:
             pass
     finally:
-        logger.info(f"WebSocket closed for response: {response_id}")
+        logger_ws.info(f"WebSocket closed for response: {response_id}")
 
 
 async def run_transcription(chunks: list, partial: bool = False) -> str:
-    """
-    Combines audio chunks, converts to WAV, runs faster-whisper.
-    partial=True uses beam_size=1 for speed.
-    partial=False uses beam_size=3 for better final accuracy.
-    """
-    # Combine all chunks into one buffer
     audio_data = b"".join(chunks)
 
     if len(audio_data) < 500:
@@ -155,14 +179,12 @@ async def run_transcription(chunks: list, partial: bool = False) -> str:
     wav_path = None
 
     try:
-        # Save combined audio
         with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
             tmp.write(audio_data)
             tmp_path = tmp.name
 
         wav_path = tmp_path.replace(".webm", ".wav")
 
-        # Convert to WAV
         result = subprocess.run(
             ["ffmpeg", "-i", tmp_path, "-ar", "16000", "-ac", "1", "-y", wav_path],
             capture_output=True,
@@ -173,7 +195,6 @@ async def run_transcription(chunks: list, partial: bool = False) -> str:
         if result.returncode != 0 or not os.path.exists(wav_path):
             return ""
 
-        # Run transcription in thread pool so it doesn't block the event loop
         loop = asyncio.get_event_loop()
         transcript = await loop.run_in_executor(
             None,
@@ -183,6 +204,7 @@ async def run_transcription(chunks: list, partial: bool = False) -> str:
         return transcript
 
     except Exception as e:
+        logger.error(f"Transcription error: {e}")
         return ""
     finally:
         if tmp_path and os.path.exists(tmp_path):
@@ -192,7 +214,6 @@ async def run_transcription(chunks: list, partial: bool = False) -> str:
 
 
 def _transcribe_sync(wav_path: str, partial: bool) -> str:
-    """Runs in a thread pool — faster-whisper is not async."""
     from backend.services.transcription import get_model
 
     model = get_model()
