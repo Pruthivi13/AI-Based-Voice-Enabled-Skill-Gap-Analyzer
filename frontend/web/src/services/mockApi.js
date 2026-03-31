@@ -232,6 +232,20 @@ export const updateCurrentUser = (data) => request('PUT', '/users/me', data);
 export const createInterviewSession = (payload) =>
   request('POST', '/sessions', payload);
 
+export const createSessionWithResume = async (formData) => {
+  const token = await getToken();
+  const response = await fetch(`${API_URL}/api/sessions/with-resume`, {
+    method: 'POST',
+    headers: {
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+    body: formData, // FormData — no Content-Type header needed
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || 'Request failed');
+  return data;
+};
+
 export const fetchInterviewHistory = (page = 1, limit = 10) =>
   request('GET', `/sessions?page=${page}&limit=${limit}`);
 

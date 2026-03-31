@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import Optional
 import uvicorn
@@ -31,6 +31,14 @@ class GenerateQuestionsRequest(BaseModel):
     experienceLevel: str
     interviewType: str
     questionCount: int = 5
+
+# ✅ NEW MODEL
+class ResumeQuestionsRequest(BaseModel):
+    targetRole: str
+    experienceLevel: str
+    interviewType: str
+    questionCount: int = 5
+    resumeText: str
 
 
 # ── Health Check ──
@@ -83,7 +91,7 @@ async def generate_report(request: ReportRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ✅ FIXED: Groq sync wrapped in executor
+# ✅ EXISTING: Generate Questions
 @app.post("/internal/generate-questions")
 async def generate_questions_endpoint(request: GenerateQuestionsRequest):
     from backend.services.question_generator import generate_questions
@@ -104,6 +112,31 @@ async def generate_questions_endpoint(request: GenerateQuestionsRequest):
 
     except Exception as e:
         logger.error(f"Generate questions error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ✅ NEW: Generate Questions from Resume
+@app.post("/internal/generate-questions-from-resume")
+async def generate_questions_from_resume_endpoint(request: ResumeQuestionsRequest):
+    from backend.services.resume_parser import generate_questions_from_resume
+    try:
+        loop = asyncio.get_event_loop()
+
+        questions = await loop.run_in_executor(
+            None,
+            lambda: generate_questions_from_resume(
+                resume_text=request.resumeText,
+                target_role=request.targetRole,
+                experience_level=request.experienceLevel,
+                interview_type=request.interviewType,
+                question_count=request.questionCount
+            )
+        )
+
+        return {"questions": questions, "success": True}
+
+    except Exception as e:
+        logger.error(f"Generate questions from resume error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -165,6 +198,9 @@ async def websocket_transcribe(websocket: WebSocket, response_id: str):
             }))
         except:
             pass
+    except BaseException as be:
+        logger_ws.error(f"WebSocket BaseException (like CancelledError): {repr(be)}")
+        raise
     finally:
         logger_ws.info(f"WebSocket closed for response: {response_id}")
 
@@ -192,7 +228,8 @@ async def run_transcription(chunks: list, partial: bool = False) -> str:
             timeout=30
         )
 
-        if result.returncode != 0 or not os.path.exists(wav_path):
+        if not os.path.exists(wav_path) or os.path.getsize(wav_path) < 100:
+            logger.error(f"ffmpeg failed to create valid wav. stderr: {result.stderr[:500]}")
             return ""
 
         loop = asyncio.get_event_loop()
