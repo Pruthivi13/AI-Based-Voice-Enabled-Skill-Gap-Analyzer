@@ -38,7 +38,14 @@ export default function LiveInterviewPage() {
         return prev - 1;
       });
     }, 1000);
-  }, []); // Note: handleStop is actually not in the dependency array here, but it's defined below. We will handle dependency correctly by hoisting or using ref, or since handleStop uses useCallback with [] it's fine. Wait, handleStop is defined below. Actually, I can just define startTimer/stopTimer here and it will work if I use handleStop from scope. Wait, React hooks order. Let's see. Let's look at how handleStop is implemented.
+  }, []);
+
+  const stopTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
 
   // Keep ref in sync with state
   useEffect(() => {

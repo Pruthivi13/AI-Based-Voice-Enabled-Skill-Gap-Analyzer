@@ -51,6 +51,25 @@ export const createSession = async (userId: string, data: any) => {
     throw new ApiError('NO_QUESTIONS', 'No questions found.', 404);
   }
 
+  // Save AI-generated questions to the DB so transcript saves don't fail Foreign Key constraints
+  const savedQuestions = await Promise.all(
+    questions.map(async (q: any) => {
+      return prisma.question.upsert({
+        where: { id: q.id },
+        update: {}, // Do nothing if it already exists
+        create: {
+          id: q.id,
+          content: q.content,
+          category: (q.category || interviewType) as any,
+          difficulty: (q.difficulty || difficulty) as any,
+          timeLimitSeconds: q.timeLimitSeconds || 120,
+          isActive: true,
+        },
+      });
+    })
+  );
+  questions = savedQuestions;
+
   const session = await prisma.interviewSession.create({
     data: {
       userId,
