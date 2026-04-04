@@ -40,6 +40,16 @@ class ResumeQuestionsRequest(BaseModel):
     questionCount: int = 5
     resumeText: str
 
+# ✅ NEW MODEL (ROADMAP)
+class GenerateRoadmapRequest(BaseModel):
+    targetRole: str
+    weakSkills: list
+
+# ✅ NEW MODEL (NODE INFO)
+class NodeInfoRequest(BaseModel):
+    skillLabel: str
+    targetRole: str
+
 
 # ── Health Check ──
 
@@ -140,8 +150,49 @@ async def generate_questions_from_resume_endpoint(request: ResumeQuestionsReques
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── WebSocket Transcription ──
+# ✅ NEW: Generate Roadmap Endpoint
+@app.post("/internal/generate-roadmap")
+async def generate_roadmap_endpoint(request: GenerateRoadmapRequest):
+    from backend.services.roadmap_generator import generate_roadmap
+    try:
+        loop = asyncio.get_event_loop()
 
+        roadmap = await loop.run_in_executor(
+            None,
+            lambda: generate_roadmap(
+                target_role=request.targetRole,
+                weak_skills=request.weakSkills
+            )
+        )
+
+        return {"roadmap": roadmap, "success": True}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ✅ NEW: Generate Node Info Endpoint
+@app.post("/internal/generate-node-info")
+async def generate_node_info_endpoint(request: NodeInfoRequest):
+    from backend.services.roadmap_generator import generate_node_info
+    try:
+        loop = asyncio.get_event_loop()
+
+        info = await loop.run_in_executor(
+            None,
+            lambda: generate_node_info(
+                skill_label=request.skillLabel,
+                target_role=request.targetRole
+            )
+        )
+
+        return {"info": info, "success": True}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── WebSocket Transcription ──
 @app.websocket("/ws/transcribe/{response_id}")
 async def websocket_transcribe(websocket: WebSocket, response_id: str):
     await websocket.accept()
@@ -153,25 +204,35 @@ async def websocket_transcribe(websocket: WebSocket, response_id: str):
 
     try:
         while True:
-            data = await websocket.receive_bytes()
+            # Accept both text and binary frames
+            message = await websocket.receive()
 
-            if data == b"END":
+            if message.get("type") == "websocket.disconnect":
+                logger_ws.info("WebSocket disconnected by client")
+                break
+
+            # Check for END signal in both text and binary forms
+            text_data = message.get("text")
+            bytes_data = message.get("bytes")
+
+            if text_data == "END" or bytes_data == b"END":
                 logger_ws.info("Received END signal — running final transcription")
                 break
 
-            audio_chunks.append(data)
-            chunk_count += 1
+            if bytes_data and len(bytes_data) > 0:
+                audio_chunks.append(bytes_data)
+                chunk_count += 1
 
-            if chunk_count % 5 == 0:
-                try:
-                    partial_text = await run_transcription(audio_chunks, partial=True)
-                    if partial_text:
-                        await websocket.send_text(json.dumps({
-                            "type": "partial",
-                            "text": partial_text
-                        }))
-                except Exception as e:
-                    logger_ws.error(f"Partial transcription error: {e}")
+                if chunk_count % 5 == 0:
+                    try:
+                        partial_text = await run_transcription(audio_chunks, partial=True)
+                        if partial_text:
+                            await websocket.send_text(json.dumps({
+                                "type": "partial",
+                                "text": partial_text
+                            }))
+                    except Exception as e:
+                        logger_ws.error(f"Partial transcription error: {e}")
 
         if audio_chunks:
             final_text = await run_transcription(audio_chunks, partial=False)
@@ -189,6 +250,8 @@ async def websocket_transcribe(websocket: WebSocket, response_id: str):
 
     except WebSocketDisconnect:
         logger_ws.info(f"WebSocket disconnected for response: {response_id}")
+        # Still try to send final transcription if we have audio
+        # (client disconnected before we could send it)
     except Exception as e:
         logger_ws.error(f"WebSocket error: {e}")
         try:
@@ -198,9 +261,6 @@ async def websocket_transcribe(websocket: WebSocket, response_id: str):
             }))
         except:
             pass
-    except BaseException as be:
-        logger_ws.error(f"WebSocket BaseException (like CancelledError): {repr(be)}")
-        raise
     finally:
         logger_ws.info(f"WebSocket closed for response: {response_id}")
 
