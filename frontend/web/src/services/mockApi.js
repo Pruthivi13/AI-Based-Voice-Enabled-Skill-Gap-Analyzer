@@ -160,3 +160,9 @@ export const generateRoadmap = (targetRole, weakSkills) =>
 
 export const getNodeInfo = (skillLabel, targetRole) =>
   request('POST', '/roadmap/node-info', { skillLabel, targetRole });
+
+export const saveRoadmap = (sessionId, targetRole, nodes, edges) =>
+  request('POST', `/sessions/${sessionId}/roadmap`, { targetRole, nodes, edges });
+
+export const fetchSessionRoadmap = (sessionId) =>
+  request('GET', `/sessions/${sessionId}/roadmap`);

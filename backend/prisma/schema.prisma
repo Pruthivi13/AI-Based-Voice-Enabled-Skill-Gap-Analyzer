@@ -115,6 +115,7 @@ model InterviewSession {
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   responses       Response[]
   report          Report?
+  roadmap         Roadmap?
   uploads         Upload[]
 
   @@index([userId])
@@ -221,4 +222,16 @@ model Upload {
   @@index([sessionId])
   @@index([responseId])
   @@index([type])
+}
+
+model Roadmap {
+  id          String           @id @default(cuid())
+  sessionId   String           @unique
+  targetRole  String
+  nodesJson   Json
+  edgesJson   Json
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  session     InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }

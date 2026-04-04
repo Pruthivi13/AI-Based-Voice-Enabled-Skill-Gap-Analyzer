@@ -13,7 +13,8 @@
  */
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { fetchSessionReview } from '../services/mockApi';
+import { fetchSessionReview, fetchSessionRoadmap } from '../services/mockApi';
+import RoadmapSection from '../components/RoadmapSection';
 import StatusChip from '../components/StatusChip';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
@@ -27,12 +28,21 @@ export default function SessionReviewPage() {
   const [review, setReview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [roadmap, setRoadmap] = useState(null);
+  const [roadmapLoading, setRoadmapLoading] = useState(false);
 
   useEffect(() => {
     if (!id) return;
     sessionStorage.setItem('currentSessionId', id);
     fetchSessionReview(id)
-      .then(setReview)
+      .then((data) => {
+        setReview(data);
+        setRoadmapLoading(true);
+        fetchSessionRoadmap(id)
+          .then(setRoadmap)
+          .catch(() => {}) // roadmap just won't show if not saved
+          .finally(() => setRoadmapLoading(false));
+      })
       .catch(() => setError('Failed to load session review.'))
       .finally(() => setLoading(false));
   }, [id]);
@@ -167,6 +177,23 @@ export default function SessionReviewPage() {
           </div>
         ))}
       </div>
+
+      {roadmapLoading && (
+        <p className="text-sm text-ink-500 text-center mt-8">
+          Loading roadmap...
+        </p>
+      )}
+      {!roadmapLoading && roadmap && (
+        <section className="mt-10">
+          <h2 className="mb-4">Learning Roadmap</h2>
+          <RoadmapSection
+            nodes={roadmap.nodes}
+            edges={roadmap.edges}
+            targetRole={roadmap.targetRole}
+            roadmapId={`${roadmap.targetRole}-${id}`.replace(/\s+/g, '-').toLowerCase()}
+          />
+        </section>
+      )}
 
       <div className="flex gap-4 justify-center mt-8">
         <button onClick={() => navigate('/setup')} className="btn-secondary">
