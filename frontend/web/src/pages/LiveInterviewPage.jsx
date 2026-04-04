@@ -196,18 +196,22 @@ export default function LiveInterviewPage() {
     if (!mediaRecorderRef.current) return;
     stopTimer();
 
-    mediaRecorderRef.current.stop();
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-
     setIsRecording(false);
     setIsPaused(false);
     setStatus('Transcribing');
     setTranscript('Transcribing your answer...');
 
-    // Signal end of audio to ML service
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(new TextEncoder().encode('END'));
-    }
+    // Listen for the MediaRecorder's 'stop' event which fires AFTER
+    // the final ondataavailable, ensuring all chunks are sent first
+    mediaRecorderRef.current.onstop = () => {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      // Signal end of audio — send as plain text string, not binary
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send('END');
+      }
+    };
+
+    mediaRecorderRef.current.stop();
   }, []);
 
   if (!currentQuestion) return null;

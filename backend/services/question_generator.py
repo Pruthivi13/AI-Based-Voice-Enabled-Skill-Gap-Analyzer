@@ -5,8 +5,8 @@ from dotenv import load_dotenv
 from groq import Groq
 from utils.logger import setup_logger
 
-# Load env
-load_dotenv()
+# Load env with explicit path
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../../backend/.env'))
 
 logger = setup_logger(__name__)
 
@@ -52,33 +52,54 @@ Return ONLY a valid JSON array:
 ]
 """
 
+    models = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "gemma2-9b-it",
+    ]
+
+    raw = ""
     try:
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert interviewer. Return only valid JSON."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            temperature=0.3,  # more stable JSON
-            max_tokens=1000,
-        )
+        response = None
+        last_error = None
+        for model_name in models:
+            try:
+                logger.info(f"Trying model: {model_name}")
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are an expert interviewer. Return only valid JSON."
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    temperature=0.3,
+                    max_tokens=1000,
+                )
+                logger.info(f"Success with model: {model_name}")
+                break
+            except Exception as model_err:
+                last_error = model_err
+                logger.warning(f"Model {model_name} failed: {model_err}")
+                continue
+
+        if response is None:
+            raise last_error or Exception("All models failed")
 
         raw = response.choices[0].message.content.strip()
 
-        # 🔧 Extract JSON safely (handles garbage text)
+        # Extract JSON safely (handles garbage text)
         match = re.search(r'\[.*\]', raw, re.DOTALL)
         if match:
             raw = match.group(0)
 
         questions = json.loads(raw)
 
-        # ✅ Normalize output
+        # Normalize output
         cleaned = []
         for i, q in enumerate(questions):
             cleaned.append({
