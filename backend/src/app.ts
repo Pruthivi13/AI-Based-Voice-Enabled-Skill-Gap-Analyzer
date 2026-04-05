@@ -17,6 +17,7 @@ import resourcesRoutes from './modules/resources/resources.routes';
 import questionRoutes from './modules/questions/questions.routes';
 import reportsRoutes from './modules/reports/reports.routes';
 import roadmapRoutes from './modules/roadmap/roadmap.routes';
+import coursesRoutes from './modules/courses/courses.routes';
 
 const app = express();
 
@@ -59,5 +60,6 @@ app.use('/api', reportsRoutes);
 app.use(errorMiddleware);
 
 app.use('/api', roadmapRoutes);
+app.use('/api', coursesRoutes);
 
 export default app;

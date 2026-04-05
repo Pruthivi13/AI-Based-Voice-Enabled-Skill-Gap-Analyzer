@@ -166,3 +166,7 @@ export const saveRoadmap = (sessionId, targetRole, nodes, edges) =>
 
 export const fetchSessionRoadmap = (sessionId) =>
   request('GET', `/sessions/${sessionId}/roadmap`);
+
+// ── Courses ──
+export const fetchCourses = (sessionId) =>
+  request('GET', `/sessions/${sessionId}/courses`);
