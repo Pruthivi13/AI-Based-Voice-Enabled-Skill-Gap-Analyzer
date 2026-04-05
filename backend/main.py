@@ -51,6 +51,12 @@ class NodeInfoRequest(BaseModel):
     targetRole: str
 
 
+# ✅ NEW MODEL (COURSES)
+class FetchCoursesRequest(BaseModel):
+    targetRole: str
+    maxCourses: int = 12
+
+
 # ── Health Check ──
 
 @app.get("/")
@@ -189,6 +195,25 @@ async def generate_node_info_endpoint(request: NodeInfoRequest):
         return {"info": info, "success": True}
 
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ✅ NEW: Fetch Courses Endpoint
+@app.post("/internal/fetch-courses")
+async def fetch_courses_endpoint(request: FetchCoursesRequest):
+    from backend.services.course_fetcher import fetch_courses
+    try:
+        loop = asyncio.get_event_loop()
+        courses = await loop.run_in_executor(
+            None,
+            lambda: fetch_courses(
+                target_role=request.targetRole,
+                max_courses=request.maxCourses,
+            )
+        )
+        return {"courses": courses, "success": True}
+    except Exception as e:
+        logger.error(f"Fetch courses error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -15,6 +15,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchSessionReview, fetchSessionRoadmap } from '../services/mockApi';
 import RoadmapSection from '../components/RoadmapSection';
+import CourseRecommendations from '../components/CourseRecommendations';
 import StatusChip from '../components/StatusChip';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
@@ -194,6 +195,9 @@ export default function SessionReviewPage() {
           />
         </section>
       )}
+
+      {/* ── Course Recommendations (persisted) ── */}
+      <CourseRecommendations sessionId={id} targetRole={review?.session?.title?.replace(/ (TECHNICAL|HR|MIXED|COMMUNICATION) Interview$/, '') || 'this role'} />
 
       <div className="flex gap-4 justify-center mt-8">
         <button onClick={() => navigate('/setup')} className="btn-secondary">

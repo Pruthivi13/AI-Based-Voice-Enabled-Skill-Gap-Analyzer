@@ -37,6 +37,7 @@ import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
 import { useTheme } from '../context/ThemeContext';
 import RoadmapSection from '../components/RoadmapSection';
+import CourseRecommendations from '../components/CourseRecommendations';
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function PerformanceAnalysisPage() {
   const navigate = useNavigate();
@@ -293,6 +294,12 @@ export default function PerformanceAnalysisPage() {
           />
         )}
       </section>
+
+      {/* ── Course Recommendations ── */}
+      <CourseRecommendations
+        sessionId={sessionId}
+        targetRole={roadmapRole || 'this role'}
+      />
 
       <section className="flex flex-wrap gap-4 justify-center">
         <button

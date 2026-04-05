@@ -116,6 +116,7 @@ model InterviewSession {
   responses       Response[]
   report          Report?
   roadmap         Roadmap?
+  courses         CourseRecommendation?
   uploads         Upload[]
 
   @@index([userId])
@@ -230,6 +231,17 @@ model Roadmap {
   targetRole  String
   nodesJson   Json
   edgesJson   Json
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  session     InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model CourseRecommendation {
+  id          String           @id @default(cuid())
+  sessionId   String           @unique
+  targetRole  String
+  coursesJson Json
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
