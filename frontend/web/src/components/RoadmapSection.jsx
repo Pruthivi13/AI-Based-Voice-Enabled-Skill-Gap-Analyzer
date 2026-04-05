@@ -379,7 +379,6 @@ function DoneRing({ small }) {
 }
 
 // ─── Node factory helper ──────────────────────────────────────────────────────
-// Each node receives: data.status, data.heatmap, data.dimmed, data.difficultyData
 function nodeStyle(base, status, dimmed, heatmap, diffData) {
   if (dimmed) return { ...base, opacity: 0.12, filter: 'grayscale(0.8)' };
   if (status === 'done')
@@ -1473,22 +1472,22 @@ function buildEdges(edges, focusedMainId, nodes) {
   }));
 }
 
-// ─── Inner flow (needs ReactFlow context for export) ──────────────────────────
+// ─── Inner flow ───────────────────────────────────────────────────────────────
 function RoadmapFlow({
   nodes: rawNodes,
   edges: rawEdges,
   targetRole,
   roadmapId,
 }) {
-  const { getNodes, fitView } = useReactFlow();
+  const { fitView } = useReactFlow();
   const flowRef = useRef(null);
 
   // ── State ────────────────────────────────────────────────────────────────
   const [progress, setProgress] = useState(() => loadProgress(roadmapId));
-  const [focusedId, setFocusedId] = useState(null); // focused main node id
+  const [focusedId, setFocusedId] = useState(null);
   const [heatmap, setHeatmap] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
-  const [diffMap, setDiffMap] = useState({}); // nodeId → difficulty string
+  const [diffMap, setDiffMap] = useState({});
 
   // Persist progress
   useEffect(() => {
@@ -1498,91 +1497,76 @@ function RoadmapFlow({
   // Fetch difficulty for heatmap when toggled on
   useEffect(() => {
     if (!heatmap) return;
-    const missing = rawNodes.filter((n) => n.type !== 'root' && !diffMap[n.id]);
-    if (missing.length === 0) return;
-    // Batch: assign difficulty based on node type heuristic (real app would use AI)
     const updates = {};
     rawNodes.forEach((n) => {
       if (diffMap[n.id]) return;
-      if (n.type === 'root' || n.type === 'main')
-        updates[n.id] = 'Intermediate';
-      else if (n.type === 'leaf' || n.type === 'optional')
-        updates[n.id] = 'Beginner';
+      if (n.type === 'root' || n.type === 'main') updates[n.id] = 'Intermediate';
+      else if (n.type === 'leaf' || n.type === 'optional') updates[n.id] = 'Beginner';
       else if (n.type === 'focus') updates[n.id] = 'Advanced';
       else updates[n.id] = 'Intermediate';
     });
-    setDiffMap((prev) => ({ ...prev, ...updates }));
+    if (Object.keys(updates).length > 0) {
+      setDiffMap((prev) => ({ ...prev, ...updates }));
+    }
   }, [heatmap, rawNodes]);
 
-  // ── Build nodes with runtime data injected ───────────────────────────────
-  const layoutNodes = useMemo(() => {
-    const base = applyDagreLayout(rawNodes, rawEdges);
-    return base.map((n) => {
-      const dimmed = focusedId
-        ? (() => {
-            // build reachable set from focusedId
-            const adj = {};
-            rawEdges.forEach((e) => {
-              (adj[e.source] = adj[e.source] || []).push(e.target);
-            });
-            const vis = new Set([focusedId]);
-            const q = [focusedId];
-            while (q.length) {
-              const c = q.shift();
-              (adj[c] || []).forEach((t) => {
-                if (!vis.has(t)) {
-                  vis.add(t);
-                  q.push(t);
-                }
-              });
-            }
-            rawEdges.forEach((e) => {
-              if (e.target === focusedId) vis.add(e.source);
-            });
-            return !vis.has(n.id);
-          })()
-        : false;
-
-      return {
-        ...n,
-        data: {
-          ...n.data,
-          status: progress[n.id] || 'not-started',
-          dimmed,
-          heatmap,
-          difficultyData: diffMap[n.id] || null,
-        },
-      };
+  // ── Build reachable set for focus mode ───────────────────────────────────
+  const reachableSet = useMemo(() => {
+    if (!focusedId) return null;
+    const adj = {};
+    rawEdges.forEach((e) => {
+      (adj[e.source] = adj[e.source] || []).push(e.target);
     });
-  }, [rawNodes, rawEdges, progress, focusedId, heatmap, diffMap]);
+    const vis = new Set([focusedId]);
+    const q = [focusedId];
+    while (q.length) {
+      const c = q.shift();
+      (adj[c] || []).forEach((t) => {
+        if (!vis.has(t)) { vis.add(t); q.push(t); }
+      });
+    }
+    rawEdges.forEach((e) => {
+      if (e.target === focusedId) vis.add(e.source);
+    });
+    return vis;
+  }, [focusedId, rawEdges]);
 
-  const layoutEdges = useMemo(
+  // ── Compute final nodes & edges (pure derivation — no setState loops) ────
+  const computedNodes = useMemo(() => {
+    const laid = applyDagreLayout(rawNodes, rawEdges);
+    return laid.map((n) => ({
+      ...n,
+      data: {
+        ...n.data,
+        status: progress[n.id] || 'not-started',
+        dimmed: reachableSet ? !reachableSet.has(n.id) : false,
+        heatmap,
+        difficultyData: diffMap[n.id] || null,
+      },
+    }));
+  }, [rawNodes, rawEdges, progress, reachableSet, heatmap, diffMap]);
+
+  const computedEdges = useMemo(
     () => buildEdges(rawEdges, focusedId, rawNodes),
     [rawEdges, focusedId, rawNodes]
   );
 
-  const [rfNodes, , onNodesChange] = useNodesState(layoutNodes);
-  const [rfEdges, , onEdgesChange] = useEdgesState(layoutEdges);
+  // ── ReactFlow state — initialise once, then drive via setters ────────────
+  const [rfNodes, setRfNodes, onNodesChange] = useNodesState(computedNodes);
+  const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState(computedEdges);
 
-  // Sync when layoutNodes / layoutEdges change
-  useEffect(() => {
-    onNodesChange(layoutNodes.map((n) => ({ type: 'reset', item: n })));
-  }, [layoutNodes]);
-  useEffect(() => {
-    onEdgesChange(layoutEdges.map((e) => ({ type: 'reset', item: e })));
-  }, [layoutEdges]);
+  // FIX: use setNodes/setEdges (the state setters) — NOT onNodesChange
+  useEffect(() => { setRfNodes(computedNodes); }, [computedNodes]);
+  useEffect(() => { setRfEdges(computedEdges); }, [computedEdges]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const handleNodeClick = useCallback((_, node) => {
     if (node.type === 'root') return;
-
-    // Focus mode: clicking a main node toggles focus
     if (node.type === 'main') {
       setFocusedId((prev) => (prev === node.id ? null : node.id));
       setSelectedNode(null);
       return;
     }
-
     setSelectedNode((prev) => (prev?.id === node.id ? null : node));
   }, []);
 
@@ -1596,30 +1580,23 @@ function RoadmapFlow({
       const { toPng } = await import('html-to-image');
       const el = flowRef.current?.querySelector('.react-flow__viewport');
       if (!el) return;
-
-      // Temporarily zoom to fit
       fitView({ padding: 0.05, duration: 0 });
       await new Promise((r) => setTimeout(r, 100));
-
       const dataUrl = await toPng(el, {
         backgroundColor: C.bg,
         pixelRatio: 2,
         style: { borderRadius: 0 },
       });
-
       const a = document.createElement('a');
       a.download = `${targetRole.replace(/\s+/g, '-').toLowerCase()}-roadmap.png`;
       a.href = dataUrl;
       a.click();
     } catch (err) {
       console.error('Export failed:', err);
-      alert(
-        'Export failed. Make sure html-to-image is installed:\nnpm install html-to-image'
-      );
+      alert('Export failed. Make sure html-to-image is installed:\nnpm install html-to-image');
     }
   }, [targetRole, fitView]);
 
-  // ── Stats ─────────────────────────────────────────────────────────────────
   const trackable = rawNodes.filter((n) => n.type !== 'root');
 
   return (

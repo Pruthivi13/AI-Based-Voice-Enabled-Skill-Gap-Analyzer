@@ -4,7 +4,7 @@ import { logger } from '../utils/logger';
 
 const mlClient = axios.create({
   baseURL: env.ML_SERVICE_URL,
-  timeout: 30000,
+  timeout: 60000,
 });
 
 export interface Course {

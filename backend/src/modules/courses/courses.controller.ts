@@ -8,9 +8,11 @@ export const getCourses = async (
   next: NextFunction
 ) => {
   try {
+    const refresh = req.query.refresh === 'true';
     const result = await getCourseRecommendations(
       req.user.id,
-      req.params.id   // sessionId from /sessions/:id/courses
+      req.params.id,
+      refresh
     );
     return sendSuccess(res, result);
   } catch (err) {

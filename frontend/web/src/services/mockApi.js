@@ -168,5 +168,5 @@ export const fetchSessionRoadmap = (sessionId) =>
   request('GET', `/sessions/${sessionId}/roadmap`);
 
 // ── Courses ──
-export const fetchCourses = (sessionId) =>
-  request('GET', `/sessions/${sessionId}/courses`);
+export const fetchCourses = (sessionId, refresh = false) =>
+  request('GET', `/sessions/${sessionId}/courses${refresh ? '?refresh=true' : ''}`);

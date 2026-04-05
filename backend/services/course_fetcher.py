@@ -207,11 +207,16 @@ def fetch_courses(target_role: str, max_courses: int = 12) -> list[dict]:
     logger.info(f"Fetching courses for: {target_role}")
     all_courses: list[dict] = []
 
-    for platform_name, site_filter in PLATFORMS:
-        results = _search_platform(target_role, platform_name, site_filter)
-        all_courses.extend(results)
-        if len(all_courses) >= max_courses:
-            break
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(PLATFORMS)) as executor:
+        futures = [executor.submit(_search_platform, target_role, p_name, s_filter) for p_name, s_filter in PLATFORMS]
+        for future in futures:  # Preserves the priority order of platforms
+            try:
+                results = future.result()
+                all_courses.extend(results)
+                # We can stop collecting if we have enough, but futures already started
+            except Exception as e:
+                logger.error(f"Error fetching platform courses: {e}")
 
     # De-duplicate by URL
     seen_urls: set[str] = set()

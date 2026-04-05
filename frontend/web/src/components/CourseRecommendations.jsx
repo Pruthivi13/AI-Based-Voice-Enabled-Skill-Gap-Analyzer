@@ -56,7 +56,7 @@ export default function CourseRecommendations({ sessionId, targetRole }) {
     else setLoading(true);
     setError(null);
     try {
-      const data = await fetchCourses(sessionId);
+      const data = await fetchCourses(sessionId, isRetry);
       setCourses(data?.courses ?? []);
       setActive(0);
     } catch {

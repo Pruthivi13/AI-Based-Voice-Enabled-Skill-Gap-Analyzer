@@ -10,7 +10,8 @@ import { logger } from '../../utils/logger';
  */
 export const getCourseRecommendations = async (
   userId: string,
-  sessionId: string
+  sessionId: string,
+  forceRefresh: boolean = false
 ) => {
   // Verify session ownership
   const session = await prisma.interviewSession.findFirst({
@@ -21,17 +22,19 @@ export const getCourseRecommendations = async (
     throw new ApiError('NOT_FOUND', 'Session not found.', 404);
   }
 
-  // Return cached courses if they exist
-  const existing = await (prisma as any).courseRecommendation.findUnique({
-    where: { sessionId },
-  });
-  if (existing) {
-    logger.info(`Returning cached courses for session: ${sessionId}`);
-    return {
-      sessionId,
-      targetRole: existing.targetRole,
-      courses: existing.coursesJson,
-    };
+  if (!forceRefresh) {
+    // Return cached courses if they exist
+    const existing = await (prisma as any).courseRecommendation.findUnique({
+      where: { sessionId },
+    });
+    if (existing && Array.isArray(existing.coursesJson) && existing.coursesJson.length > 0) {
+      logger.info(`Returning cached courses for session: ${sessionId}`);
+      return {
+        sessionId,
+        targetRole: existing.targetRole,
+        courses: existing.coursesJson,
+      };
+    }
   }
 
   // Fetch fresh from ML / Serper
