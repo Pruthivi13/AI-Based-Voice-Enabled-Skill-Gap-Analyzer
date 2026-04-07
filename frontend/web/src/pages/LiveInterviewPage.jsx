@@ -14,17 +14,20 @@ export default function LiveInterviewPage() {
   );
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [transcript, setTranscript] = useState('');
-  const [status, setStatus] = useState('Ready');
-  const [timeLeft, setTimeLeft] = useState(null);
+  const [isRecording, setIsRecording]   = useState(false);
+  const [isPaused, setIsPaused]         = useState(false);
+  const [transcript, setTranscript]     = useState('');
+  const [status, setStatus]             = useState('Ready');
+  const [timeLeft, setTimeLeft]         = useState(null);
 
-  const timerRef = useRef(null);
+  // ── NEW: expose the live MediaStream so RecordingControls can read it ──
+  const [liveStream, setLiveStream] = useState(null);
+
+  const timerRef         = useRef(null);
   const mediaRecorderRef = useRef(null);
-  const wsRef = useRef(null);
-  const streamRef = useRef(null);
-  const currentIndexRef = useRef(0);
+  const wsRef            = useRef(null);
+  const streamRef        = useRef(null);
+  const currentIndexRef  = useRef(0);
 
   const startTimer = useCallback((seconds) => {
     setTimeLeft(seconds);
@@ -32,7 +35,7 @@ export default function LiveInterviewPage() {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timerRef.current);
-          handleStop(); // auto-stop when time runs out
+          handleStop();
           return 0;
         }
         return prev - 1;
@@ -47,7 +50,6 @@ export default function LiveInterviewPage() {
     }
   }, []);
 
-  // Keep ref in sync with state
   useEffect(() => {
     currentIndexRef.current = currentIndex;
   }, [currentIndex]);
@@ -72,37 +74,27 @@ export default function LiveInterviewPage() {
       setStatus('Recording');
       return;
     }
-
     if (isRecording) return;
 
     try {
-      // 1 — Get mic access
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      // 2 — Open WebSocket to Node proxy
+      // ── NEW: push stream into state so RecordingControls receives it ──
+      setLiveStream(stream);
+
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-      const wsUrl = API_URL.replace('http', 'ws');
+      const wsUrl   = API_URL.replace('http', 'ws');
       const questionId = questions[currentIndexRef.current]?.id;
       const ws = new WebSocket(`${wsUrl}/ws/transcribe/${questionId}`);
       wsRef.current = ws;
 
-      ws.onopen = () => {
-        console.log('WebSocket connected');
-      };
+      ws.onopen = () => console.log('WebSocket connected');
 
       ws.onmessage = async (event) => {
-        // Convert Blob to text first if needed
-        const raw =
-          event.data instanceof Blob ? await event.data.text() : event.data;
-
+        const raw = event.data instanceof Blob ? await event.data.text() : event.data;
         let msg;
-        try {
-          msg = JSON.parse(raw);
-        } catch (e) {
-          console.error('Failed to parse WebSocket message:', raw);
-          return;
-        }
+        try { msg = JSON.parse(raw); } catch (e) { return; }
 
         if (msg.type === 'partial') {
           setTranscript(msg.text);
@@ -115,40 +107,36 @@ export default function LiveInterviewPage() {
           setIsRecording(false);
           setIsPaused(false);
 
-          // Use ref to avoid stale closure
-          const idx = currentIndexRef.current;
-          const questionId = questions[idx]?.id;
+          // ── NEW: clear stream so waveform returns to idle ──
+          setLiveStream(null);
 
-          // ← Save transcript to DB
+          const idx = currentIndexRef.current;
+          const qId = questions[idx]?.id;
+
           try {
-            await saveTranscript(sessionId, questionId, msg.text, idx + 1);
+            await saveTranscript(sessionId, qId, msg.text, idx + 1);
           } catch (err) {
             console.error('Failed to save transcript:', err);
           }
 
           if (idx < questions.length - 1) {
-            // Move to next question
             setCurrentIndex(idx + 1);
             currentIndexRef.current = idx + 1;
             setTranscript('');
-            setStatus('Ready');
             ws.close();
           } else {
-            // Last question — finish session
             setStatus('Uploading');
             finishSession(sessionId)
               .catch(console.error)
-              .finally(() => {
-                ws.close();
-                navigate('/processing');
-              });
+              .finally(() => { ws.close(); navigate('/processing'); });
           }
         }
 
         if (msg.type === 'error') {
-          console.error('WebSocket error from server:', msg.message);
+          console.error('WebSocket server error:', msg.message);
           setStatus('Ready');
           setIsRecording(false);
+          setLiveStream(null);
         }
       };
 
@@ -156,13 +144,11 @@ export default function LiveInterviewPage() {
         console.error('WebSocket error:', err);
         setStatus('Ready');
         setIsRecording(false);
+        setLiveStream(null);
       };
 
-      ws.onclose = () => {
-        console.log('WebSocket closed');
-      };
+      ws.onclose = () => console.log('WebSocket closed');
 
-      // 3 — Start MediaRecorder, stream chunks via WebSocket
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=opus',
       });
@@ -174,63 +160,61 @@ export default function LiveInterviewPage() {
         }
       };
 
-      mediaRecorder.start(200); // chunk every 200ms
+      mediaRecorder.start(200);
       startTimer(questions[currentIndexRef.current]?.timeLimitSeconds || 120);
       setIsRecording(true);
       setIsPaused(false);
-      setTranscript('Listening...');
+      setTranscript('Start speaking when ready...');
       setStatus('Recording');
     } catch (err) {
       console.error('Mic error:', err);
       alert('Microphone access denied. Please allow microphone access.');
     }
-  }, [isRecording, isPaused, questions, sessionId, navigate]);
+  }, [isRecording, isPaused, questions, sessionId, navigate, startTimer, stopTimer]);
 
   const handlePause = useCallback(() => {
     mediaRecorderRef.current?.pause();
     setIsPaused(true);
     setStatus('Paused');
+    // Stream stays alive; waveform will draw in muted color
   }, []);
 
   const handleStop = useCallback(() => {
     if (!mediaRecorderRef.current) return;
     stopTimer();
-
     setIsRecording(false);
     setIsPaused(false);
     setStatus('Transcribing');
     setTranscript('Transcribing your answer...');
 
-    // Listen for the MediaRecorder's 'stop' event which fires AFTER
-    // the final ondataavailable, ensuring all chunks are sent first
     mediaRecorderRef.current.onstop = () => {
+      // ── NEW: clear stream after stop so waveform resets ──
       streamRef.current?.getTracks().forEach((t) => t.stop());
-      // Signal end of audio — send as plain text string, not binary
+      setLiveStream(null);
+
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send('END');
       }
     };
-
     mediaRecorderRef.current.stop();
-  }, []);
+  }, [stopTimer]);
 
   if (!currentQuestion) return null;
 
   const statusColor = {
-    Ready: 'bg-green-400',
-    Recording: 'bg-red-400 animate-pulse',
-    Paused: 'bg-amber-400',
+    Ready:        'bg-green-400',
+    Recording:    'bg-red-400 animate-pulse',
+    Paused:       'bg-amber-400',
     Transcribing: 'bg-blue-400 animate-pulse',
-    Uploading: 'bg-purple-400 animate-pulse',
+    Uploading:    'bg-purple-400 animate-pulse',
   };
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 max-w-4xl mx-auto w-full">
+
       {/* Status indicator */}
       <div className="self-end mb-6 flex items-center gap-2">
-        <span
-          className={`w-2 h-2 rounded-full ${statusColor[status] || 'bg-green-400'}`}
-        />
+        <span className={`w-2 h-2 rounded-full ${statusColor[status] || 'bg-green-400'}`} />
         <span className="text-xs font-bold uppercase tracking-wider text-white/50">
           {status}
         </span>
@@ -238,13 +222,11 @@ export default function LiveInterviewPage() {
 
       {/* Timer */}
       {timeLeft !== null && (
-        <div className={`self-end mb-2 flex items-center gap-2 text-sm font-bold tabular-nums ${
-          timeLeft <= 10
-            ? 'text-red-400'
-            : timeLeft <= 30
-            ? 'text-amber-400'
-            : 'text-white/50'
-        }`}>
+        <div
+          className={`self-end mb-2 flex items-center gap-2 text-sm font-bold tabular-nums ${
+            timeLeft <= 10 ? 'text-red-400' : timeLeft <= 30 ? 'text-amber-400' : 'text-white/50'
+          }`}
+        >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
           </svg>
@@ -268,11 +250,12 @@ export default function LiveInterviewPage() {
         <TranscriptPanel transcript={transcript} dark />
       </div>
 
-      {/* Recording Controls */}
+      {/* Recording Controls — now receives the live stream */}
       {status !== 'Transcribing' && status !== 'Uploading' ? (
         <RecordingControls
           isRecording={isRecording}
           isPaused={isPaused}
+          stream={liveStream}
           onRecord={handleRecord}
           onPause={handlePause}
           onStop={handleStop}
@@ -285,7 +268,7 @@ export default function LiveInterviewPage() {
         </div>
       )}
 
-      {/* Question progress dots */}
+      {/* Progress dots */}
       <div className="flex gap-2 mt-6">
         {questions.map((_, i) => (
           <div
@@ -294,12 +277,13 @@ export default function LiveInterviewPage() {
               i === currentIndex
                 ? 'bg-primary-500 w-4'
                 : i < currentIndex
-                  ? 'bg-green-400 w-2'
-                  : 'bg-white/20 w-2'
+                ? 'bg-green-400 w-2'
+                : 'bg-white/20 w-2'
             }`}
           />
         ))}
       </div>
+
     </div>
   );
 }
