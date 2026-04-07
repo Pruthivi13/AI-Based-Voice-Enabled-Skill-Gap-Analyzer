@@ -14,6 +14,10 @@ app = FastAPI(title="AI Voice Skill Gap Analyzer - ML Service")
 logger = setup_logger(__name__)
 
 # ── Request Models ──
+class EvaluateAnswerRequest(BaseModel):
+    question: str
+    answer: str
+    reference: str
 
 class TranscribeRequest(BaseModel):
     audioUrl: str
@@ -215,6 +219,24 @@ async def fetch_courses_endpoint(request: FetchCoursesRequest):
     except Exception as e:
         logger.error(f"Fetch courses error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/internal/evaluate-answer")
+async def evaluate_answer_endpoint(request: EvaluateAnswerRequest):
+    from backend.services.content_scorer import evaluate_answer
+    try:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: evaluate_answer(
+                question=request.question,
+                answer=request.answer,
+                reference=request.reference,
+            )
+        )
+        return {**result, "success": True}
+    except Exception as e:
+        logger.error(f"Evaluate answer error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))    
 
 
 # ── WebSocket Transcription ──
