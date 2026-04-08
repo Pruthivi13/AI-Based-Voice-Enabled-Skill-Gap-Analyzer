@@ -13,7 +13,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchInterviewHistory } from '../services/mockApi';
+import { fetchInterviewHistory } from '../services/api';
 import HistoryCard from '../components/HistoryCard';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';

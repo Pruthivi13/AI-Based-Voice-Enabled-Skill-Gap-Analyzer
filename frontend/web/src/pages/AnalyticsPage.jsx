@@ -23,7 +23,7 @@ import {
   Filler,
 } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
-import { fetchAnalytics } from '../services/mockApi';
+import { fetchAnalytics } from '../services/api';
 import ScoreCard from '../components/ScoreCard';
 import LoadingState from '../components/LoadingState';
 import { useTheme } from '../context/ThemeContext';

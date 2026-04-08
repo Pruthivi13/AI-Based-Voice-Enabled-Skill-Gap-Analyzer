@@ -17,6 +17,7 @@ const navLinks = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/history',   label: 'Interviews' },
   { to: '/analytics', label: 'Insights' },
+  { to: '/resources', label: 'Resources' },
   { to: '/settings',  label: 'Settings' },
 ];
 

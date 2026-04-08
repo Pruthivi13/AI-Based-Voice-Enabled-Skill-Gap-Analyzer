@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchDashboardData } from '../services/mockApi';
+import { fetchDashboardData } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';

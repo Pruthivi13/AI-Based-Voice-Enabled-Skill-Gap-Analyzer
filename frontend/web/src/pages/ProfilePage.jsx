@@ -8,7 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { getCurrentUser } from '../services/mockApi';
+import { getCurrentUser } from '../services/api';
 import GearIcon from '../components/ui/gear-icon';
 import FileDescriptionIcon from '../components/ui/file-description-icon';
 import ChartBarIcon from '../components/ui/chart-bar-icon';

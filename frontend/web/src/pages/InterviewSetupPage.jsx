@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createInterviewSession, createSessionWithResume } from '../services/mockApi';
+import { createInterviewSession, createSessionWithResume } from '../services/api';
 
 const QUICK_ROLES = [
   'Frontend Developer',

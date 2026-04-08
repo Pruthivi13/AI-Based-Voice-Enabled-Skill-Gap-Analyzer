@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { finishSession, saveTranscript } from '../services/mockApi';
+import { finishSession, saveTranscript } from '../services/api';
 import QuestionCard from '../components/QuestionCard';
 import TranscriptPanel from '../components/TranscriptPanel';
 import RecordingControls from '../components/RecordingControls';

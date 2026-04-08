@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchProcessingStatus, generateAnalysis } from '../services/mockApi';
+import { fetchProcessingStatus, generateAnalysis } from '../services/api';
 import GlassPanel from '../components/GlassPanel';
 import ProgressChecklist from '../components/ProgressChecklist';
 import BrainCircuitIcon from '../components/ui/brain-circuit-icon';

@@ -15,7 +15,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { fetchSettings, updateSettings } from '../services/mockApi';
+import { fetchSettings, updateSettings } from '../services/api';
 import LoadingState from '../components/LoadingState';
 import { CheckCircle2 } from 'lucide-react';
 

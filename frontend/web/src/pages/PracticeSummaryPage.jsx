@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchPracticeSummary, generateAnalysis } from '../services/mockApi';
+import { fetchPracticeSummary, generateAnalysis } from '../services/api';
 import GlassPanel from '../components/GlassPanel';
 import TranscriptPanel from '../components/TranscriptPanel';
 import LoadingState from '../components/LoadingState';
