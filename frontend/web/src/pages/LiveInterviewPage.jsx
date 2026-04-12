@@ -1,10 +1,68 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { finishSession, saveTranscript } from '../services/api';
+import { generateFollowupQuestions } from '../services/mockApi';
 import QuestionCard from '../components/QuestionCard';
 import TranscriptPanel from '../components/TranscriptPanel';
 import RecordingControls from '../components/RecordingControls';
 
+// ── Inline Follow-up Panel ───────────────────────────────────────────────────
+function FollowupPanel({ followups, loading, onSkip, onAnswer }) {
+  if (loading) {
+    return (
+      <div className="w-full glass-panel p-5 mb-6 text-center">
+        <div className="flex items-center justify-center gap-2 text-white/60 text-sm">
+          <span className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+          Generating follow-up questions...
+        </div>
+      </div>
+    );
+  }
+
+  if (!followups || followups.length === 0) return null;
+
+  const fq = followups[0]; // show the first follow-up
+
+  return (
+    <div className="w-full mb-6 rounded-2xl border border-primary-500/40 bg-primary-500/5 p-5">
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-3">
+        <span className="w-2 h-2 rounded-full bg-primary-500 animate-pulse" />
+        <span className="text-xs font-bold uppercase tracking-widest text-primary-400">
+          Follow-up Question
+        </span>
+        {fq.topic && (
+          <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-primary-500/15 text-primary-400 font-semibold">
+            {fq.topic}
+          </span>
+        )}
+      </div>
+
+      {/* Question */}
+      <p className="text-white font-semibold text-lg mb-4 leading-snug">
+        "{fq.question}"
+      </p>
+
+      {/* Actions */}
+      <div className="flex gap-3">
+        <button
+          onClick={onAnswer}
+          className="btn-primary text-sm py-2 px-5 flex items-center gap-2"
+        >
+          🎤 Answer Follow-up
+        </button>
+        <button
+          onClick={onSkip}
+          className="btn-glass text-sm py-2 px-5"
+        >
+          Skip →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Page ────────────────────────────────────────────────────────────────
 export default function LiveInterviewPage() {
   const navigate = useNavigate();
 
@@ -19,15 +77,29 @@ export default function LiveInterviewPage() {
   const [transcript, setTranscript]     = useState('');
   const [status, setStatus]             = useState('Ready');
   const [timeLeft, setTimeLeft]         = useState(null);
+  const [liveStream, setLiveStream]     = useState(null);
 
-  // ── NEW: expose the live MediaStream so RecordingControls can read it ──
-  const [liveStream, setLiveStream] = useState(null);
+  // ── Follow-up state ──
+  const [followupQuestions, setFollowupQuestions] = useState([]);
+  const [followupLoading, setFollowupLoading]     = useState(false);
+  const [showFollowup, setShowFollowup]           = useState(false);
+  const [isFollowupActive, setIsFollowupActive]   = useState(false);
+  const pendingTranscriptRef = useRef('');
+  const pendingIndexRef      = useRef(0);
 
   const timerRef         = useRef(null);
   const mediaRecorderRef = useRef(null);
   const wsRef            = useRef(null);
   const streamRef        = useRef(null);
   const currentIndexRef  = useRef(0);
+
+  // ── Timer helpers ────────────────────────────────────────────────────────
+  const stopTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
 
   const startTimer = useCallback((seconds) => {
     setTimeLeft(seconds);
@@ -43,21 +115,10 @@ export default function LiveInterviewPage() {
     }, 1000);
   }, []);
 
-  const stopTimer = useCallback(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
+  useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
 
   useEffect(() => {
-    currentIndexRef.current = currentIndex;
-  }, [currentIndex]);
-
-  useEffect(() => {
-    if (!sessionId || questions.length === 0) {
-      navigate('/setup');
-    }
+    if (!sessionId || questions.length === 0) navigate('/setup');
     return () => {
       wsRef.current?.close();
       streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -65,27 +126,80 @@ export default function LiveInterviewPage() {
     };
   }, []);
 
-  const currentQuestion = questions[currentIndex];
+  const currentQuestion = isFollowupActive
+    ? followupQuestions[0]
+    : questions[currentIndex];
 
-  const handleRecord = useCallback(async () => {
-    if (isPaused) {
-      mediaRecorderRef.current?.resume();
-      setIsPaused(false);
-      setStatus('Recording');
-      return;
-    }
-    if (isRecording) return;
+  // ── Advance to next question (or finish) ─────────────────────────────────
+  const advanceOrFinish = useCallback(
+    async (idx) => {
+      setShowFollowup(false);
+      setIsFollowupActive(false);
+      setFollowupQuestions([]);
+      setTranscript('');
 
-    try {
+      if (idx < questions.length - 1) {
+        setCurrentIndex(idx + 1);
+        currentIndexRef.current = idx + 1;
+        wsRef.current?.close();
+      } else {
+        setStatus('Uploading');
+        finishSession(sessionId)
+          .catch(console.error)
+          .finally(() => { wsRef.current?.close(); navigate('/processing'); });
+      }
+    },
+    [sessionId, questions.length, navigate]
+  );
+
+  // ── After primary answer: fetch follow-ups ───────────────────────────────
+  const fetchFollowups = useCallback(
+    async (finalTranscript, idx) => {
+      const q = questions[idx];
+      if (!q || !finalTranscript || finalTranscript.length < 15) {
+        await advanceOrFinish(idx);
+        return;
+      }
+
+      setFollowupLoading(true);
+      setShowFollowup(true);
+      pendingTranscriptRef.current = finalTranscript;
+      pendingIndexRef.current = idx;
+
+      try {
+        const data = await generateFollowupQuestions(
+          sessionId,
+          q.content,
+          finalTranscript,
+          q.role || 'Software Engineer',
+          2
+        );
+        const fqs = data?.followups ?? [];
+        setFollowupQuestions(fqs);
+
+        if (fqs.length === 0) {
+          // No follow-ups generated — move on
+          await advanceOrFinish(idx);
+        }
+      } catch (err) {
+        console.error('Follow-up generation failed:', err);
+        await advanceOrFinish(idx);
+      } finally {
+        setFollowupLoading(false);
+      }
+    },
+    [sessionId, questions, advanceOrFinish]
+  );
+
+  // ── WebSocket recording helper ────────────────────────────────────────────
+  const startRecordingSession = useCallback(
+    async (questionId) => {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-
-      // ── NEW: push stream into state so RecordingControls receives it ──
       setLiveStream(stream);
 
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
       const wsUrl   = API_URL.replace('http', 'ws');
-      const questionId = questions[currentIndexRef.current]?.id;
       const ws = new WebSocket(`${wsUrl}/ws/transcribe/${questionId}`);
       wsRef.current = ws;
 
@@ -94,7 +208,7 @@ export default function LiveInterviewPage() {
       ws.onmessage = async (event) => {
         const raw = event.data instanceof Blob ? await event.data.text() : event.data;
         let msg;
-        try { msg = JSON.parse(raw); } catch (e) { return; }
+        try { msg = JSON.parse(raw); } catch { return; }
 
         if (msg.type === 'partial') {
           setTranscript(msg.text);
@@ -106,8 +220,6 @@ export default function LiveInterviewPage() {
           setStatus('Ready');
           setIsRecording(false);
           setIsPaused(false);
-
-          // ── NEW: clear stream so waveform returns to idle ──
           setLiveStream(null);
 
           const idx = currentIndexRef.current;
@@ -119,16 +231,12 @@ export default function LiveInterviewPage() {
             console.error('Failed to save transcript:', err);
           }
 
-          if (idx < questions.length - 1) {
-            setCurrentIndex(idx + 1);
-            currentIndexRef.current = idx + 1;
-            setTranscript('');
-            ws.close();
+          if (isFollowupActive) {
+            // Follow-up answer done — advance
+            await advanceOrFinish(pendingIndexRef.current);
           } else {
-            setStatus('Uploading');
-            finishSession(sessionId)
-              .catch(console.error)
-              .finally(() => { ws.close(); navigate('/processing'); });
+            // Primary answer done — fetch follow-ups
+            await fetchFollowups(msg.text, idx);
           }
         }
 
@@ -147,8 +255,6 @@ export default function LiveInterviewPage() {
         setLiveStream(null);
       };
 
-      ws.onclose = () => console.log('WebSocket closed');
-
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=opus',
       });
@@ -160,8 +266,33 @@ export default function LiveInterviewPage() {
         }
       };
 
+      return mediaRecorder;
+    },
+    [sessionId, questions, isFollowupActive, advanceOrFinish, fetchFollowups, stopTimer]
+  );
+
+  // ── Controls ──────────────────────────────────────────────────────────────
+  const handleRecord = useCallback(async () => {
+    if (isPaused) {
+      mediaRecorderRef.current?.resume();
+      setIsPaused(false);
+      setStatus('Recording');
+      return;
+    }
+    if (isRecording) return;
+
+    try {
+      const questionId = isFollowupActive
+        ? questions[pendingIndexRef.current]?.id  // reuse slot
+        : questions[currentIndexRef.current]?.id;
+
+      const mediaRecorder = await startRecordingSession(questionId);
+      const timeLimitSeconds = isFollowupActive
+        ? 90
+        : (questions[currentIndexRef.current]?.timeLimitSeconds || 120);
+
       mediaRecorder.start(200);
-      startTimer(questions[currentIndexRef.current]?.timeLimitSeconds || 120);
+      startTimer(timeLimitSeconds);
       setIsRecording(true);
       setIsPaused(false);
       setTranscript('Start speaking when ready...');
@@ -170,13 +301,12 @@ export default function LiveInterviewPage() {
       console.error('Mic error:', err);
       alert('Microphone access denied. Please allow microphone access.');
     }
-  }, [isRecording, isPaused, questions, sessionId, navigate, startTimer, stopTimer]);
+  }, [isRecording, isPaused, isFollowupActive, questions, startRecordingSession, startTimer]);
 
   const handlePause = useCallback(() => {
     mediaRecorderRef.current?.pause();
     setIsPaused(true);
     setStatus('Paused');
-    // Stream stays alive; waveform will draw in muted color
   }, []);
 
   const handleStop = useCallback(() => {
@@ -188,10 +318,8 @@ export default function LiveInterviewPage() {
     setTranscript('Transcribing your answer...');
 
     mediaRecorderRef.current.onstop = () => {
-      // ── NEW: clear stream after stop so waveform resets ──
       streamRef.current?.getTracks().forEach((t) => t.stop());
       setLiveStream(null);
-
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send('END');
       }
@@ -199,7 +327,19 @@ export default function LiveInterviewPage() {
     mediaRecorderRef.current.stop();
   }, [stopTimer]);
 
-  if (!currentQuestion) return null;
+  // ── Follow-up panel handlers ──────────────────────────────────────────────
+  const handleAnswerFollowup = useCallback(() => {
+    setShowFollowup(false);
+    setIsFollowupActive(true);
+    setTranscript('');
+    setStatus('Ready');
+  }, []);
+
+  const handleSkipFollowup = useCallback(async () => {
+    await advanceOrFinish(pendingIndexRef.current);
+  }, [advanceOrFinish]);
+
+  if (!currentQuestion && !followupLoading && !showFollowup) return null;
 
   const statusColor = {
     Ready:        'bg-green-400',
@@ -222,11 +362,9 @@ export default function LiveInterviewPage() {
 
       {/* Timer */}
       {timeLeft !== null && (
-        <div
-          className={`self-end mb-2 flex items-center gap-2 text-sm font-bold tabular-nums ${
-            timeLeft <= 10 ? 'text-red-400' : timeLeft <= 30 ? 'text-amber-400' : 'text-white/50'
-          }`}
-        >
+        <div className={`self-end mb-2 flex items-center gap-2 text-sm font-bold tabular-nums ${
+          timeLeft <= 10 ? 'text-red-400' : timeLeft <= 30 ? 'text-amber-400' : 'text-white/50'
+        }`}>
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
           </svg>
@@ -234,24 +372,58 @@ export default function LiveInterviewPage() {
         </div>
       )}
 
-      {/* Question Card */}
-      <div className="w-full mb-8">
-        <QuestionCard
-          question={currentQuestion.content}
-          category={currentQuestion.category}
-          number={currentIndex + 1}
-          total={questions.length}
-          dark
-        />
+      {/* Question Card — show primary OR follow-up label */}
+      <div className="w-full mb-6">
+        {isFollowupActive ? (
+          <div className="rounded-2xl p-6 bg-dark-800/80 border border-primary-500/30 shadow-lg">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xs font-bold uppercase tracking-widest text-primary-400">
+                Follow-up Question
+              </span>
+              {followupQuestions[0]?.topic && (
+                <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-primary-500/15 text-primary-400 font-semibold">
+                  {followupQuestions[0].topic}
+                </span>
+              )}
+            </div>
+            <p className="text-xl font-bold text-white leading-snug">
+              "{followupQuestions[0]?.question}"
+            </p>
+          </div>
+        ) : (
+          questions[currentIndex] && (
+            <QuestionCard
+              question={questions[currentIndex].content}
+              category={questions[currentIndex].category}
+              number={currentIndex + 1}
+              total={questions.length}
+              dark
+            />
+          )
+        )}
       </div>
 
-      {/* Live Transcript Panel */}
-      <div className="w-full mb-10">
-        <TranscriptPanel transcript={transcript} dark />
-      </div>
+      {/* Follow-up Panel (shown after primary answer, before follow-up recording) */}
+      {showFollowup && !isFollowupActive && (
+        <div className="w-full">
+          <FollowupPanel
+            followups={followupQuestions}
+            loading={followupLoading}
+            onAnswer={handleAnswerFollowup}
+            onSkip={handleSkipFollowup}
+          />
+        </div>
+      )}
 
-      {/* Recording Controls — now receives the live stream */}
-      {status !== 'Transcribing' && status !== 'Uploading' ? (
+      {/* Live Transcript */}
+      {!showFollowup && (
+        <div className="w-full mb-10">
+          <TranscriptPanel transcript={transcript} dark />
+        </div>
+      )}
+
+      {/* Recording Controls — only shown when not waiting for follow-up decision */}
+      {!showFollowup && status !== 'Transcribing' && status !== 'Uploading' ? (
         <RecordingControls
           isRecording={isRecording}
           isPaused={isPaused}
@@ -260,13 +432,13 @@ export default function LiveInterviewPage() {
           onPause={handlePause}
           onStop={handleStop}
         />
-      ) : (
+      ) : !showFollowup ? (
         <div className="text-white/60 text-sm animate-pulse text-center">
           {status === 'Transcribing'
             ? '🧠 AI is transcribing your answer...'
             : '📤 Saving your session...'}
         </div>
-      )}
+      ) : null}
 
       {/* Progress dots */}
       <div className="flex gap-2 mt-6">

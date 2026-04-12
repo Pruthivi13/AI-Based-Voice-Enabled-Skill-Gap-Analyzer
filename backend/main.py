@@ -36,6 +36,13 @@ class GenerateQuestionsRequest(BaseModel):
     interviewType: str
     questionCount: int = 5
 
+# ✅ NEW MODEL (FOLLOW-UP)
+class GenerateFollowupRequest(BaseModel):
+    originalQuestion: str
+    transcript: str
+    targetRole: str = "Software Engineer"
+    count: int = 2
+
 # ✅ NEW MODEL
 class ResumeQuestionsRequest(BaseModel):
     targetRole: str
@@ -199,6 +206,27 @@ async def generate_node_info_endpoint(request: NodeInfoRequest):
         return {"info": info, "success": True}
 
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ✅ NEW: Generate Follow-up Questions Endpoint
+@app.post("/internal/generate-followup")
+async def generate_followup_endpoint(request: GenerateFollowupRequest):
+    from backend.services.followup_generator import generate_followup_questions
+    try:
+        loop = asyncio.get_event_loop()
+        followups = await loop.run_in_executor(
+            None,
+            lambda: generate_followup_questions(
+                original_question=request.originalQuestion,
+                transcript=request.transcript,
+                target_role=request.targetRole,
+                count=request.count,
+            )
+        )
+        return {"followups": followups, "success": True}
+    except Exception as e:
+        logger.error(f"Generate follow-up error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
