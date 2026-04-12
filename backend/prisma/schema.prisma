@@ -31,6 +31,7 @@ enum Difficulty {
 enum SessionStatus {
   CREATED
   IN_PROGRESS
+  PAUSED
   PROCESSING
   COMPLETED
   FAILED
@@ -109,6 +110,8 @@ model InterviewSession {
   overallScore    Float?
   startedAt       DateTime         @default(now())
   endedAt         DateTime?
+  pausedAt        DateTime?
+  questionsJson   Json?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createInterviewSession, createSessionWithResume } from '../services/api';
+import { createInterviewSession, createSessionWithResume, resumeSession } from '../services/api';
 
 const QUICK_ROLES = [
   'Frontend Developer',
@@ -54,6 +54,38 @@ export default function InterviewSetupPage() {
   const [error, setError] = useState('');
   const [resumeFile, setResumeFile] = useState(null);
   const [useResume, setUseResume] = useState(false);
+  const [pausedSession, setPausedSession] = useState(null);
+
+  useEffect(() => {
+    // Check for a paused session in this browser
+    const savedId = sessionStorage.getItem('currentSessionId');
+    const savedIndex = sessionStorage.getItem('resumeFromIndex');
+    const savedQuestions = sessionStorage.getItem('currentQuestions');
+    if (savedId && savedIndex && savedQuestions) {
+      const questions = JSON.parse(savedQuestions);
+      const idx = Number(savedIndex);
+      if (idx > 0 && idx < questions.length) {
+        setPausedSession({ id: savedId, resumeIndex: idx, total: questions.length });
+      }
+    }
+  }, []);
+
+  const handleResume = async () => {
+    try {
+      setLoading(true);
+      const data = await resumeSession(pausedSession.id);
+      sessionStorage.setItem('currentSessionId', data.sessionId);
+      sessionStorage.setItem('currentQuestions', JSON.stringify(data.questions));
+      // resumeFromIndex is already in sessionStorage from before
+      navigate('/interview');
+    } catch (err) {
+      setError('Could not resume session. It may have expired.');
+      setPausedSession(null);
+      sessionStorage.removeItem('resumeFromIndex');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleStart = async () => {
     if (!role.trim()) {
@@ -102,6 +134,43 @@ export default function InterviewSetupPage() {
       <p className="text-ink-500 mb-10">
         Type any role and our AI will generate questions specific to it.
       </p>
+
+      {/* ── Resume paused session banner ── */}
+      {pausedSession && (
+        <div className="mb-6 rounded-2xl border border-amber-400/30 bg-amber-500/5 p-5
+                        flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-bold text-amber-400 flex items-center gap-2 mb-1">
+              ⏸ You have a paused session
+            </p>
+            <p className="text-xs text-white/60">
+              Answered {pausedSession.resumeIndex} of {pausedSession.total} questions.
+              Pick up where you left off.
+            </p>
+          </div>
+          <div className="flex gap-2 flex-shrink-0">
+            <button
+              onClick={handleResume}
+              disabled={loading}
+              className="btn-primary text-sm py-2 px-5 disabled:opacity-50"
+            >
+              ▶ Resume
+            </button>
+            <button
+              onClick={() => {
+                setPausedSession(null);
+                sessionStorage.removeItem('resumeFromIndex');
+                sessionStorage.removeItem('currentSessionId');
+                sessionStorage.removeItem('currentQuestions');
+                sessionStorage.removeItem('skippedQuestions');
+              }}
+              className="text-xs text-white/40 hover:text-white/70 px-3 py-2 transition-colors"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="card space-y-6">
         {error && (
