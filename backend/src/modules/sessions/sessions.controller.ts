@@ -194,3 +194,31 @@ export const createSessionWithResume = async (
     next(err);
   }
 };
+
+export const pauseSession = async (
+  req: any,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { pauseSession: svc } = await import('./sessions.service');
+    const result = await svc(req.user.id, req.params.id);
+    return sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const resumeSession = async (
+  req: any,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { resumeSession: svc } = await import('./sessions.service');
+    const result = await svc(req.user.id, req.params.id);
+    return sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+};

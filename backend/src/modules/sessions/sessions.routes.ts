@@ -8,6 +8,8 @@ import {
   finishSession,
   retryQuestion,
   createSessionWithResume,
+  pauseSession,
+  resumeSession,
 } from './sessions.controller';
 import { authMiddleware } from '../../middleware/auth.middleware';
 import { strictRateLimit } from '../../middleware/rateLimit.middleware';
@@ -42,5 +44,7 @@ router.post(
   authMiddleware,
   retryQuestion
 );
+router.post('/sessions/:id/pause',  authMiddleware, pauseSession);
+router.post('/sessions/:id/resume', authMiddleware, resumeSession);
 
 export default router;

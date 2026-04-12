@@ -83,6 +83,12 @@ export const createSession = async (userId: string, data: any) => {
     },
   });
 
+  // After session is created, persist the assigned questions for resume
+  await prisma.interviewSession.update({
+    where: { id: session.id },
+    data: { questionsJson: questions as any },
+  });
+
   return { sessionId: session.id, status: session.status, questions };
 };
 
@@ -167,4 +173,46 @@ export const finishSession = async (userId: string, sessionId: string) => {
   });
 
   return { success: true, status: updated.status };
+};
+
+export const pauseSession = async (userId: string, sessionId: string) => {
+  const session = await prisma.interviewSession.findFirst({
+    where: { id: sessionId, userId },
+  });
+  if (!session) throw new ApiError('NOT_FOUND', 'Session not found.', 404);
+  if (session.status === 'COMPLETED' || session.status === 'PROCESSING') {
+    throw new ApiError('BAD_REQUEST', 'Session cannot be paused.', 400);
+  }
+  const updated = await prisma.interviewSession.update({
+    where: { id: sessionId },
+    data: { status: 'PAUSED', pausedAt: new Date() },
+  });
+  return { success: true, status: updated.status };
+};
+
+export const resumeSession = async (userId: string, sessionId: string) => {
+  const session = await prisma.interviewSession.findFirst({
+    where: { id: sessionId, userId },
+    include: { responses: { select: { questionId: true, answerOrder: true } } },
+  });
+  if (!session) throw new ApiError('NOT_FOUND', 'Session not found.', 404);
+
+  const allQuestions = (session.questionsJson as any[]) ?? [];
+  const answeredIds = new Set(session.responses.map((r) => r.questionId));
+  const remaining = allQuestions.filter((q: any) => !answeredIds.has(q.id));
+  const resumeFromIndex = allQuestions.length - remaining.length;
+
+  // Reactivate
+  await prisma.interviewSession.update({
+    where: { id: sessionId },
+    data: { status: 'IN_PROGRESS', pausedAt: null },
+  });
+
+  return {
+    sessionId,
+    resumeFromIndex,
+    questions: allQuestions,    // full list — frontend slices from resumeFromIndex
+    answeredCount: answeredIds.size,
+    totalCount: allQuestions.length,
+  };
 };

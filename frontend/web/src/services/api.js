@@ -89,6 +89,12 @@ export const fetchQuestions = (sessionId) =>
 export const finishSession = (sessionId) =>
   request('POST', `/sessions/${sessionId}/finish`);
 
+export const pauseSession = (sessionId) =>
+  request('POST', `/sessions/${sessionId}/pause`);
+
+export const resumeSession = (sessionId) =>
+  request('POST', `/sessions/${sessionId}/resume`);
+
 // ── Uploads ──────────────────────────────────────────────────────────────────
 export const uploadAudioPlaceholder = async (
   sessionId,
