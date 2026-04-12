@@ -220,7 +220,7 @@ async def generate_followup_endpoint(request: GenerateFollowupRequest):
             lambda: generate_followup_questions(
                 original_question=request.originalQuestion,
                 transcript=request.transcript,
-                targetRole=request.targetRole,
+                target_role=request.targetRole,
                 count=request.count,
             )
         )
