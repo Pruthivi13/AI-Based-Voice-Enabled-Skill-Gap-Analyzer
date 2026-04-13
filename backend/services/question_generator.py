@@ -41,13 +41,23 @@ Rules:
 - For COMMUNICATION: collaboration and stakeholder questions for {target_role}
 - For MIXED: mix of technical and behavioral for {target_role}
 
+For EACH question, provide 2-3 helpful hints that guide the candidate:
+- For BEHAVIORAL questions: suggest using STAR method, specific frameworks
+- For TECHNICAL questions: mention key concepts, common pitfalls, relevant technologies
+- Keep hints concise (1 sentence each)
+
 Return ONLY a valid JSON array:
 [
   {{
     "content": "question text here",
     "category": "TECHNICAL or HR or COMMUNICATION",
     "difficulty": "EASY or MEDIUM or HARD",
-    "timeLimitSeconds": 120
+    "timeLimitSeconds": 120,
+    "hints": [
+      "First helpful hint here",
+      "Second helpful hint here",
+      "Optional third hint"
+    ]
   }}
 ]
 """
@@ -108,6 +118,7 @@ Return ONLY a valid JSON array:
                 "category": q.get("category", "TECHNICAL"),
                 "difficulty": q.get("difficulty", "MEDIUM"),
                 "timeLimitSeconds": q.get("timeLimitSeconds", 120),
+                "hints": q.get("hints", []),
                 "role": target_role,
             })
 

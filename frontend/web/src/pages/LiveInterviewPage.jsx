@@ -5,6 +5,7 @@ import { generateFollowupQuestions } from '../services/mockApi';
 import QuestionCard from '../components/QuestionCard';
 import TranscriptPanel from '../components/TranscriptPanel';
 import RecordingControls from '../components/RecordingControls';
+import AnimatedHintsButton from '../components/AnimatedHintsButton';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const SKIPPED_KEY  = 'skippedQuestions';
@@ -131,6 +132,10 @@ export default function LiveInterviewPage() {
   }, []);
 
   const currentQuestion = isFollowupActive ? followupQuestions[0] : questions[currentIndex];
+  
+  // Extract hints from question
+  const currentHints = currentQuestion?.hints || [];
+  const questionType = currentQuestion?.category || '';
 
   // ── Advance to next question or finish ───────────────────────────────────
   const advanceOrFinish = useCallback(async (idx) => {
@@ -339,6 +344,11 @@ export default function LiveInterviewPage() {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 max-w-4xl mx-auto w-full">
+
+      {/* ── 💡 Animated Hints Button (Fixed Top-Right) ── */}
+      {!showFollowup && currentHints.length > 0 && (
+        <AnimatedHintsButton hints={currentHints} questionType={questionType} />
+      )}
 
       {/* ── Top bar: status + pause button ── */}
       <div className="self-stretch flex items-center justify-between mb-6">
