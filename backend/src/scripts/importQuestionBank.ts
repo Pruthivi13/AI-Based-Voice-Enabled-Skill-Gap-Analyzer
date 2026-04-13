@@ -94,6 +94,9 @@ async function main() {
 
     if (!content.trim()) { skipped++; continue; }
 
+    const hintsRaw = row['hints'] || row['Hints'] || '';
+    const hints = hintsRaw ? hintsRaw.split('|').map(h => h.trim()) : [];
+
     try {
       await prisma.question.create({
         data: {
@@ -102,6 +105,7 @@ async function main() {
           category: mapCategory(categoryRaw),
           difficulty: mapDifficulty(difficultyRaw),
           role: role?.trim() || null,
+          hints: hints.length > 0 ? hints : null,
           timeLimitSeconds: parseInt(timeLimitRaw) || 120,
           isActive: true,
         },

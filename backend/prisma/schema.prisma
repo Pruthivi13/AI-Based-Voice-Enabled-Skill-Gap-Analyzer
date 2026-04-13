@@ -136,6 +136,8 @@ model Question {
   expectedKeywords Json?
   timeLimitSeconds Int?              @default(120)
   isActive         Boolean           @default(true)
+  hints            Json?
+  referenceAnswer  String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 

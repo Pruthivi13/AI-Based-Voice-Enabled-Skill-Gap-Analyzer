@@ -39,13 +39,22 @@ Rules:
 - Make questions feel like a real interviewer who READ their resume
 - Generate exactly {question_count} questions
 
+For EACH question, provide 2-3 helpful hints:
+- For BEHAVIORAL: suggest STAR method, relate to their experience
+- For TECHNICAL: mention technologies from their resume, common patterns
+- Keep hints actionable and concise
+
 Return ONLY a valid JSON array, no explanation, no markdown:
 [
   {{
     "content": "question text here referencing their resume",
     "category": "TECHNICAL or HR or COMMUNICATION",
     "difficulty": "EASY or MEDIUM or HARD",
-    "timeLimitSeconds": 120
+    "timeLimitSeconds": 120,
+    "hints": [
+      "Hint related to their specific experience",
+      "Another helpful tip"
+    ]
   }}
 ]
 """
@@ -86,6 +95,7 @@ Return ONLY a valid JSON array, no explanation, no markdown:
                 "category": q.get("category", "TECHNICAL"),
                 "difficulty": q.get("difficulty", "MEDIUM"),
                 "timeLimitSeconds": q.get("timeLimitSeconds", 120),
+                "hints": q.get("hints", []),
                 "role": target_role,
                 "source": "resume"
             })

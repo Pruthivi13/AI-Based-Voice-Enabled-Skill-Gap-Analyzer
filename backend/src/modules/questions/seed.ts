@@ -8,12 +8,22 @@ const questions = [
     category: 'TECHNICAL' as const,
     difficulty: 'EASY' as const,
     timeLimitSeconds: 120,
+    hints: [
+      'Focus on scope differences (block vs function)',
+      'Mention hoisting behavior',
+      'Explain when to use each one'
+    ]
   },
   {
     content: 'What is the virtual DOM in React?',
     category: 'TECHNICAL' as const,
     difficulty: 'EASY' as const,
     timeLimitSeconds: 120,
+    hints: [
+      'Explain it as a lightweight copy of the real DOM',
+      'Mention the diffing algorithm',
+      'Describe performance benefits'
+    ]
   },
   {
     content: 'What is the difference between == and === in JavaScript?',
@@ -72,6 +82,11 @@ const questions = [
     category: 'TECHNICAL' as const,
     difficulty: 'HARD' as const,
     timeLimitSeconds: 300,
+    hints: [
+      'Start with functional requirements (read/write ratio)',
+      'Discuss database choice (SQL vs NoSQL)',
+      'Mention caching strategy and hash collisions'
+    ]
   },
   {
     content: 'Explain the CAP theorem and its implications.',
@@ -118,6 +133,11 @@ const questions = [
     category: 'HR' as const,
     difficulty: 'MEDIUM' as const,
     timeLimitSeconds: 180,
+    hints: [
+      'Use the STAR method (Situation, Task, Action, Result)',
+      'Focus on your specific role in resolving it',
+      'Highlight communication and empathy skills'
+    ]
   },
   {
     content: 'Tell me about a time you failed and what you learned.',

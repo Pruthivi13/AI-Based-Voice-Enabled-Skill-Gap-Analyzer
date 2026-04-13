@@ -56,13 +56,16 @@ export const createSession = async (userId: string, data: any) => {
     questions.map(async (q: any) => {
       return prisma.question.upsert({
         where: { id: q.id },
-        update: {}, // Do nothing if it already exists
+        update: {
+          hints: q.hints || null,
+        },
         create: {
           id: q.id,
           content: q.content,
           category: (q.category || interviewType) as any,
           difficulty: (q.difficulty || difficulty) as any,
           timeLimitSeconds: q.timeLimitSeconds || 120,
+          hints: q.hints || null,
           isActive: true,
         },
       });
@@ -155,6 +158,7 @@ export const getSessionQuestions = async (
       category: true,
       difficulty: true,
       timeLimitSeconds: true,
+      hints: true,
     },
   });
 
