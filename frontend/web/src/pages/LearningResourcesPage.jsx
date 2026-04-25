@@ -13,7 +13,7 @@
  *  • Personalisation banner showing which skills were flagged
  */
 import React, { useState, useEffect, useMemo } from 'react';
-import { fetchResources } from '../services/mockApi';
+import { fetchResources } from '../services/api';
 import ResourceCourseCard from '../components/ResourceCourseCard';
 import { useTheme } from '../context/ThemeContext';
 import {

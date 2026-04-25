@@ -28,7 +28,7 @@ import {
   generateRoadmap,
   saveRoadmap,
   getNodeInfo,
-} from '../services/mockApi';
+} from '../services/api';
 import RadarChart from '../components/RadarChart';
 import ScoreCard from '../components/ScoreCard';
 import FeedbackPanel from '../components/FeedbackPanel';

@@ -7,7 +7,7 @@
  * Maps to PRD §9.22 Interview History and UI Reference §17.7
  *
  * Props:
- *   session — Session object from mockData
+ *   session — Session object from the API
  *   onView  — Handler for "View Detailed Analysis" click
  */
 import React from 'react';
