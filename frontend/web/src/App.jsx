@@ -31,6 +31,7 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import LearningResourcesPage from './pages/LearningResourcesPage';
 import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
+import BookmarksPage from './pages/BookmarksPage';
 
 export default function App() {
   return (
@@ -96,6 +97,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <LearningResourcesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/bookmarks"
+          element={
+            <ProtectedRoute>
+              <BookmarksPage />
             </ProtectedRoute>
           }
         />

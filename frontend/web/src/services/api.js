@@ -200,3 +200,19 @@ export const generateFollowupQuestions = (
     targetRole,
     count,
   });
+
+// ── Bookmarks ─────────────────────────────────────────────────────────────────
+export const fetchBookmarks = () =>
+  request('GET', '/bookmarks');
+
+export const toggleBookmark = (questionId, note) =>
+  request('POST', `/bookmarks/${questionId}`, { note });
+
+export const updateBookmarkNote = (questionId, note) =>
+  request('PUT', `/bookmarks/${questionId}/note`, { note });
+
+export const deleteBookmark = (bookmarkId) =>
+  request('DELETE', `/bookmarks/${bookmarkId}`);
+
+export const fetchBookmarkStatus = (questionIds = []) =>
+  request('GET', `/bookmarks/status?ids=${questionIds.join(',')}`);

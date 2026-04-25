@@ -66,6 +66,7 @@ model User {
   settings      UserSettings?
   sessions      InterviewSession[]
   uploads       Upload[]
+  bookmarks     BookmarkedQuestion[]
 
   @@index([supabaseUid])
   @@index([email])
@@ -151,6 +152,7 @@ model Question {
   updatedAt        DateTime          @updatedAt
 
   responses        Response[]
+  bookmarks        BookmarkedQuestion[]
 
   @@index([category])
   @@index([role])
@@ -260,4 +262,19 @@ model CourseRecommendation {
   updatedAt   DateTime         @updatedAt
 
   session     InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model BookmarkedQuestion {
+  id         String   @id @default(cuid())
+  userId     String
+  questionId String
+  note       String?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId])
+  @@index([userId])
+  @@index([questionId])
 }

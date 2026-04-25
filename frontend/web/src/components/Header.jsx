@@ -16,6 +16,7 @@ import LogoutIcon from './ui/logout-icon';
 const navLinks = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/history',   label: 'Interviews' },
+  { to: '/bookmarks', label: 'Bookmarks' },
   { to: '/analytics', label: 'Insights' },
   { to: '/resources', label: 'Resources' },
   { to: '/settings',  label: 'Settings' },
