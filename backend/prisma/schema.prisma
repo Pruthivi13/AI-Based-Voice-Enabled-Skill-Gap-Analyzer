@@ -35,6 +35,8 @@ enum SessionStatus {
   PROCESSING
   COMPLETED
   FAILED
+  SCHEDULED
+  CANCELLED
 }
 
 enum QuestionCategory {
@@ -77,6 +79,9 @@ model UserProfile {
   preferredLanguage String          @default("en")
   resumeUrl         String?
   bio               String?
+  currentStreak     Int             @default(0)
+  longestStreak     Int             @default(0)
+  lastPracticeDate  DateTime?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
@@ -84,16 +89,18 @@ model UserProfile {
 }
 
 model UserSettings {
-  id               String   @id @default(cuid())
-  userId           String   @unique
-  theme            String   @default("light")
-  sessionReminders Boolean  @default(true)
-  weeklyProgress   Boolean  @default(true)
-  newResources     Boolean  @default(false)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  userId                 String   @unique
+  theme                  String   @default("light")
+  sessionReminders       Boolean  @default(true)
+  weeklyProgress         Boolean  @default(true)
+  newResources           Boolean  @default(false)
+  preferredReminderTime  String?
+  preferredPracticeTime  String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model InterviewSession {
@@ -111,6 +118,7 @@ model InterviewSession {
   startedAt       DateTime         @default(now())
   endedAt         DateTime?
   pausedAt        DateTime?
+  scheduledAt     DateTime?
   questionsJson   Json?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -125,6 +133,7 @@ model InterviewSession {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+  @@index([scheduledAt])
 }
 
 model Question {

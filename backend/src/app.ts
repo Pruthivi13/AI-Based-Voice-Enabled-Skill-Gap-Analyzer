@@ -19,6 +19,7 @@ import reportsRoutes from './modules/reports/reports.routes';
 import roadmapRoutes from './modules/roadmap/roadmap.routes';
 import coursesRoutes from './modules/courses/courses.routes';
 import followupRoutes from './modules/sessions/followup.routes';
+import scheduleRoutes from './modules/schedule/schedule.routes';
 
 const app = express();
 
@@ -58,6 +59,7 @@ app.use('/api', resourcesRoutes);
 app.use('/api', questionRoutes);
 app.use('/api', reportsRoutes);
 app.use('/api', followupRoutes);
+app.use('/api', scheduleRoutes);
 
 app.use(errorMiddleware);
 

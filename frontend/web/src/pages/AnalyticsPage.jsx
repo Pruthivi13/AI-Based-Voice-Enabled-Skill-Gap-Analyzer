@@ -7,8 +7,6 @@
  *   • Score trend line chart (Chart.js)
  *   • Weak area frequency bars
  *   • Competency average cards
- *
- * TODO: Replace mock data with fetchAnalytics()
  */
 import React, { useMemo, useState, useEffect } from 'react';
 import {

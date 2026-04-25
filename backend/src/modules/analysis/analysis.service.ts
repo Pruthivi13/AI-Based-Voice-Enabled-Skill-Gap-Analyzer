@@ -2,6 +2,7 @@ import prisma from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
 import { analyzeResponse } from '../../services/mlClient.service';
 import { logger } from '../../utils/logger';
+import { updateStreak } from '../../services/streak.service';
 
 const getRatingLabel = (score: number): string => {
   if (score >= 9) return 'Excellent';
@@ -314,6 +315,9 @@ export const generateMockAnalysis = async (
     where: { id: sessionId },
     data: { status: 'COMPLETED', overallScore },
   });
+
+  // Update practice streak
+  await updateStreak(userId);
 
   return { success: true, message: 'Analysis complete' };
 };

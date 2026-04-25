@@ -168,3 +168,35 @@ export const saveTranscript = (
     answerOrder,
     durationSeconds,
   });
+
+// ── Roadmap ──────────────────────────────────────────────────────────────────
+export const generateRoadmap = (targetRole, weakSkills) =>
+  request('POST', '/roadmap/generate', { targetRole, weakSkills });
+
+export const getNodeInfo = (skillLabel, targetRole) =>
+  request('POST', '/roadmap/node-info', { skillLabel, targetRole });
+
+export const saveRoadmap = (sessionId, targetRole, nodes, edges) =>
+  request('POST', `/sessions/${sessionId}/roadmap`, { targetRole, nodes, edges });
+
+export const fetchSessionRoadmap = (sessionId) =>
+  request('GET', `/sessions/${sessionId}/roadmap`);
+
+// ── Courses ──────────────────────────────────────────────────────────────────
+export const fetchCourses = (sessionId, refresh = false) =>
+  request('GET', `/sessions/${sessionId}/courses${refresh ? '?refresh=true' : ''}`);
+
+// ── Follow-up Questions ──────────────────────────────────────────────────────
+export const generateFollowupQuestions = (
+  sessionId,
+  originalQuestion,
+  transcript,
+  targetRole = 'Software Engineer',
+  count = 2
+) =>
+  request('POST', `/sessions/${sessionId}/followup`, {
+    originalQuestion,
+    transcript,
+    targetRole,
+    count,
+  });

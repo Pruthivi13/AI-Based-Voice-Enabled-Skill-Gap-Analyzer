@@ -14,7 +14,7 @@
 import React, {
   useState, useEffect, useRef, useCallback,
 } from 'react';
-import { fetchCourses } from '../services/mockApi';
+import { fetchCourses } from '../services/api';
 import CourseCard from './CourseCard';
 import { BookOpen, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';

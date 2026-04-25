@@ -7,8 +7,6 @@
  *   • Filter tabs (All, Technical, Behavioral)
  *   • Session cards with score, date, role, duration, summary
  *   • View Detailed Analysis / Replay / Delete actions
- *
- * TODO: Replace mock data with fetchInterviewHistory()
  */
 
 import React, { useState, useEffect } from 'react';

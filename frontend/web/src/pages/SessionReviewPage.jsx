@@ -8,12 +8,10 @@
  *   • Session meta (role, date, duration, overall score)
  *   • Per-question transcript, score, feedback, strengths, improvements
  *   • Retry action per question
- *
- * TODO: Replace mock data with fetchSessionReview(sessionId)
  */
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { fetchSessionReview, fetchSessionRoadmap } from '../services/mockApi';
+import { fetchSessionReview, fetchSessionRoadmap } from '../services/api';
 import RoadmapSection from '../components/RoadmapSection';
 import CourseRecommendations from '../components/CourseRecommendations';
 import StatusChip from '../components/StatusChip';

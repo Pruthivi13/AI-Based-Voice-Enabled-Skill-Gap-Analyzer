@@ -59,6 +59,7 @@ const BorderGlow = ({
   glowIntensity = 1.0,
   coneSpread = 25,
   animated = false,
+  continuous = false,
   colors = ['#c084fc', '#f472b6', '#38bdf8'],
   fillOpacity = 0.5,
   style = {},
@@ -71,6 +72,7 @@ const BorderGlow = ({
   }, []);
 
   const getEdgeProximity = useCallback((el, x, y) => {
+    if (continuous) return 1; // Always max edge proximity when continuous
     const [cx, cy] = getCenterOfElement(el);
     const dx = x - cx;
     const dy = y - cy;
@@ -79,7 +81,7 @@ const BorderGlow = ({
     if (dx !== 0) kx = cx / Math.abs(dx);
     if (dy !== 0) ky = cy / Math.abs(dy);
     return Math.min(Math.max(1 / Math.min(kx, ky), 0), 1);
-  }, [getCenterOfElement]);
+  }, [getCenterOfElement, continuous]);
 
   const getCursorAngle = useCallback((el, x, y) => {
     const [cx, cy] = getCenterOfElement(el);
@@ -93,6 +95,7 @@ const BorderGlow = ({
   }, [getCenterOfElement]);
 
   const handlePointerMove = useCallback((e) => {
+    if (continuous) return; // Don't override angle if continuous rotation is active
     const card = cardRef.current;
     if (!card) return;
     const rect = card.getBoundingClientRect();
@@ -102,10 +105,11 @@ const BorderGlow = ({
     const angle = getCursorAngle(card, x, y);
     card.style.setProperty('--edge-proximity', `${(edge * 100).toFixed(3)}`);
     card.style.setProperty('--cursor-angle',   `${angle.toFixed(3)}deg`);
-  }, [getEdgeProximity, getCursorAngle]);
+  }, [getEdgeProximity, getCursorAngle, continuous]);
 
+  // One-time sweep animation
   useEffect(() => {
-    if (!animated || !cardRef.current) return;
+    if (!animated || continuous || !cardRef.current) return;
     const card = cardRef.current;
     const angleStart = 110;
     const angleEnd   = 465;
@@ -122,7 +126,34 @@ const BorderGlow = ({
       onUpdate: v => card.style.setProperty('--edge-proximity', v),
       onEnd: () => card.classList.remove('sweep-active'),
     });
-  }, [animated]);
+  }, [animated, continuous]);
+
+  // Continuous rotating clock animation
+  useEffect(() => {
+    if (!continuous || !cardRef.current) return;
+    const card = cardRef.current;
+    let rafId;
+    
+    // Force the glow to be visible by adding sweep-active, and setting max proximity
+    card.classList.add('sweep-active');
+    card.style.setProperty('--edge-proximity', 100);
+
+    const start = performance.now();
+    const duration = 8000; // 8 seconds per full rotation
+
+    const tick = () => {
+      const elapsed = performance.now() - start;
+      const deg = (elapsed / duration * 360) % 360;
+      card.style.setProperty('--cursor-angle', `${deg}deg`);
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      card.classList.remove('sweep-active');
+    };
+  }, [continuous]);
 
   const glowVars      = buildGlowVars(glowColor, glowIntensity);
   const gradientVars  = buildGradientVars(colors);
@@ -139,13 +170,15 @@ const BorderGlow = ({
         '--glow-padding':     `${glowRadius}px`,
         '--cone-spread':      coneSpread,
         '--fill-opacity':     fillOpacity,
+        height: '100%',
+        boxSizing: 'border-box',
         ...glowVars,
         ...gradientVars,
         ...style,
       }}
     >
       <span className="edge-light" />
-      <div className="border-glow-inner">
+      <div className="border-glow-inner" style={{ height: '100%', boxSizing: 'border-box' }}>
         {children}
       </div>
     </div>
