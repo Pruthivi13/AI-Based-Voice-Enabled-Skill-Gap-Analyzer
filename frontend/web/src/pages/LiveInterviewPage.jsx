@@ -6,6 +6,7 @@ import QuestionCard from '../components/QuestionCard';
 import TranscriptPanel from '../components/TranscriptPanel';
 import RecordingControls from '../components/RecordingControls';
 import AnimatedHintsButton from '../components/AnimatedHintsButton';
+import BookmarkButton from '../components/BookmarkButton';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const SKIPPED_KEY  = 'skippedQuestions';
@@ -429,8 +430,14 @@ export default function LiveInterviewPage() {
                 number={currentIndex + 1}
                 total={questions.length}
                 dark
+                actions={
+                  <BookmarkButton
+                    questionId={questions[currentIndex].id}
+                    size="sm"
+                    showLabel
+                  />
+                }
               />
-              {/* Skipped badge if this question was previously skipped and retried */}
               {isSkipped(questions[currentIndex]?.id) && (
                 <span className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider
                                  px-2 py-1 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">

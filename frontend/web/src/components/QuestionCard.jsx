@@ -13,7 +13,7 @@
  */
 import React from 'react';
 
-export default function QuestionCard({ question, category, number, total, dark = true }) {
+export default function QuestionCard({ question, category, number, total, dark = true, actions }) {
   return (
     <div className={`rounded-2xl p-6 ${
       dark
@@ -28,11 +28,14 @@ export default function QuestionCard({ question, category, number, total, dark =
           </svg>
           Interview Question
         </span>
-        {number && total && (
-          <span className={`text-xs font-medium ${dark ? 'text-white/40' : 'text-ink-500'}`}>
-            {number} / {total}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {actions}
+          {number && total && (
+            <span className={`text-xs font-medium ${dark ? 'text-white/40' : 'text-ink-500'}`}>
+              {number} / {total}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Question text */}
