@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchDashboardData } from '../services/api';
+import { motion, AnimatePresence } from 'framer-motion';
+import { fetchDashboardData, fetchWeakSkillPrescription } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
+import WeakSkillInsightCard from '../components/WeakSkillInsightCard';
+import TargetedPracticeModal from '../components/TargetedPracticeModal';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
 import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
@@ -1163,8 +1166,10 @@ export default function DashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showSchedule, setShowSchedule] = useState(false);
-  const [exiting, setExiting] = useState(false);
+  const [showSchedule,    setShowSchedule]    = useState(false);
+  const [exiting,         setExiting]         = useState(false);
+  const [prescription,    setPrescription]    = useState(null);
+  const [showTargetModal, setShowTargetModal] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -1175,6 +1180,12 @@ export default function DashboardPage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  // Load prescription after dashboard data is ready
+  useEffect(() => {
+    if (!data) return;
+    fetchWeakSkillPrescription().then(setPrescription).catch(console.error);
+  }, [data]);
 
   const handleCancelInterview = async () => {
     if (!data?.nextInterview) return;
@@ -1232,28 +1243,35 @@ export default function DashboardPage() {
           <p style={{ margin: '4px 0 0', color: subColor }}>Welcome back! Ready to ace your next interview?</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
+          {/* Fix My Weak Areas — shown only when a weakness is detected */}
+          {prescription?.primaryWeakness && (
+            <motion.button
+              initial={{ opacity:0, scale:0.9 }} animate={{ opacity:1, scale:1 }}
+              whileHover={{ scale:1.02 }} whileTap={{ scale:0.97 }}
+              onClick={() => setShowTargetModal(true)}
+              style={{ padding:'10px 20px', borderRadius:12, border:'1px solid rgba(239,68,68,0.4)', background:'rgba(239,68,68,0.1)', color:'#f87171', fontWeight:700, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', gap:7 }}
+            >
+              <span style={{ fontSize:15 }}>{prescription.primaryWeakness.emoji}</span>
+              Fix My Weak Areas
+            </motion.button>
+          )}
           <button
             onClick={() => setShowSchedule(true)}
-            style={{
-              padding: '10px 20px', borderRadius: 12,
-              border: '1px solid rgba(249,115,22,0.35)',
-              background: 'rgba(249,115,22,0.1)', color: '#f97316',
-              fontWeight: 700, fontSize: 13, cursor: 'pointer',
-            }}
+            style={{ padding:'10px 20px', borderRadius:12, border:'1px solid rgba(249,115,22,0.35)', background:'rgba(249,115,22,0.1)', color:'#f97316', fontWeight:700, fontSize:13, cursor:'pointer' }}
           >
             📅 Schedule Interview
           </button>
           <button
             onClick={() => navigate('/setup')}
-            style={{
-              padding: '10px 20px', borderRadius: 12, border: 'none',
-              background: '#f97316', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer',
-            }}
+            style={{ padding:'10px 20px', borderRadius:12, border:'none', background:'#f97316', color:'#fff', fontWeight:700, fontSize:13, cursor:'pointer' }}
           >
             🎯 Start Now
           </button>
         </div>
       </div>
+
+      {/* ── Weak Skill Insight Banner ── */}
+      <WeakSkillInsightCard />
 
       {/* ── Top Row: Streak + Next Interview ── */}
       <div style={{ 
@@ -1637,6 +1655,16 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* ── Targeted Practice Modal ── */}
+      <AnimatePresence>
+        {showTargetModal && prescription && (
+          <TargetedPracticeModal
+            prescription={prescription}
+            onClose={() => setShowTargetModal(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

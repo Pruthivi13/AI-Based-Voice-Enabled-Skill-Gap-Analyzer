@@ -3,6 +3,7 @@ import { ApiError } from '../../utils/apiError';
 import { analyzeResponse } from '../../services/mlClient.service';
 import { logger } from '../../utils/logger';
 import { updateStreak } from '../../services/streak.service';
+import { captureSkillSnapshot } from '../../services/skillSnapshot.service';
 
 const getRatingLabel = (score: number): string => {
   if (score >= 9) return 'Excellent';
@@ -319,6 +320,9 @@ export const generateMockAnalysis = async (
 
   // Update practice streak
   await updateStreak(userId);
+
+  // Capture skill snapshot for timeline analytics
+  await captureSkillSnapshot(userId, sessionId);
 
   return { success: true, message: 'Analysis complete' };
 };
