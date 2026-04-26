@@ -32,6 +32,7 @@ import LearningResourcesPage from './pages/LearningResourcesPage';
 import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
 import BookmarksPage from './pages/BookmarksPage';
+import WarmupPage from './pages/WarmupPage';
 
 export default function App() {
   return (
@@ -125,6 +126,16 @@ export default function App() {
           }
         />
       </Route>
+
+      {/* Warmup — standalone full-screen (manages its own layout) */}
+      <Route
+        path="/warmup"
+        element={
+          <ProtectedRoute>
+            <WarmupPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Protected dark immersive pages */}
       <Route element={<ImmersiveLayout />}>

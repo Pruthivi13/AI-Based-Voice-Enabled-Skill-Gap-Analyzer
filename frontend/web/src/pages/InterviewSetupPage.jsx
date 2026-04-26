@@ -55,6 +55,7 @@ export default function InterviewSetupPage() {
   const [resumeFile, setResumeFile] = useState(null);
   const [useResume, setUseResume] = useState(false);
   const [pausedSession, setPausedSession] = useState(null);
+  const [warmupEnabled, setWarmupEnabled] = useState(true);
 
   useEffect(() => {
     // Check for a paused session in this browser
@@ -129,7 +130,11 @@ export default function InterviewSetupPage() {
 
       sessionStorage.setItem('currentSessionId', result.sessionId);
       sessionStorage.setItem('currentQuestions', JSON.stringify(result.questions));
-      navigate('/interview');
+      if (warmupEnabled) {
+        navigate('/warmup');
+      } else {
+        navigate('/interview');
+      }
     } catch (err) {
       setError('Failed to create session. Please try again.');
     } finally {
@@ -291,6 +296,62 @@ export default function InterviewSetupPage() {
               ))}
             </div>
           </div>
+        </div>
+
+        {/* ── Warmup Mode Toggle ── */}
+        <div className={`rounded-xl border p-4 transition-all ${
+          warmupEnabled
+            ? 'border-purple-400/30 bg-purple-500/5'
+            : 'border-surface-200'
+        }`}>
+          <label className="flex items-center justify-between cursor-pointer">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                warmupEnabled
+                  ? 'bg-purple-500/15 border border-purple-500/30'
+                  : 'bg-surface-100 border border-surface-200'
+              }`}>
+                <span className="text-xl">🧘</span>
+              </div>
+              <div>
+                <p className="font-semibold text-sm text-ink-900 flex items-center gap-2">
+                  Warmup Mode
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-100 text-purple-600">
+                    Recommended
+                  </span>
+                </p>
+                <p className="text-xs text-ink-500 mt-0.5">
+                  2-min breathing + mic check before the real session
+                </p>
+              </div>
+            </div>
+            <div
+              className={`w-11 h-6 rounded-full p-0.5 transition-colors cursor-pointer ml-4 flex-shrink-0 ${
+                warmupEnabled ? 'bg-purple-500' : 'bg-surface-200'
+              }`}
+              onClick={() => setWarmupEnabled(!warmupEnabled)}
+            >
+              <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                warmupEnabled ? 'translate-x-5' : 'translate-x-0'
+              }`} />
+            </div>
+          </label>
+
+          {warmupEnabled && (
+            <div className="mt-3 pt-3 border-t border-purple-400/15 grid grid-cols-3 gap-2">
+              {[
+                { emoji: '🫁', label: 'Breathing', desc: '~22s guided' },
+                { emoji: '🎙️', label: 'Mic Check',  desc: 'Voice warm-up' },
+                { emoji: '✅', label: 'Ready',      desc: 'Confidence boost' },
+              ].map(({ emoji, label, desc }) => (
+                <div key={label} className="text-center">
+                  <span className="text-base">{emoji}</span>
+                  <p className="text-[10px] font-bold text-purple-600 mt-0.5">{label}</p>
+                  <p className="text-[9px] text-ink-500">{desc}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* AI Notice */}
