@@ -144,6 +144,9 @@ export default function AnalyticsPage() {
 
   if (loading) return <LoadingState message="Loading analytics..." />;
 
+  // No sessions yet — show friendly empty state
+  const hasData = (data?.totalSessions ?? 0) > 0;
+
   return (
     <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
 
@@ -155,6 +158,22 @@ export default function AnalyticsPage() {
         </p>
       </div>
 
+      {!hasData ? (
+        <div style={{
+          borderRadius: 20, padding: '60px 24px', textAlign: 'center',
+          background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+          border: `1px dashed ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+        }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
+          <p style={{ fontSize: 18, fontWeight: 700, color: isDark ? '#f1f5f9' : '#1c1917', marginBottom: 8 }}>
+            No analytics yet
+          </p>
+          <p style={{ fontSize: 14, color: isDark ? 'rgba(255,255,255,0.4)' : '#78716c' }}>
+            Complete your first interview session to start seeing performance insights.
+          </p>
+        </div>
+      ) : (
+        <>
       {/* ── Summary stats ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
@@ -194,31 +213,37 @@ export default function AnalyticsPage() {
         </div>
       </section>
 
-      {/* ── Bottom row ── */}
-      <div className="grid lg:grid-cols-2 gap-8">
-        <div className="card">
-          <h3 className={`font-bold mb-4 ${isDark ? 'text-white' : 'text-ink-900'}`}>
-            Weak Area Frequency
-          </h3>
-          <div className="h-48">
-            <Bar data={weakAreaData} options={barOptions} />
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <h3 className={`font-bold ${isDark ? 'text-white' : 'text-ink-900'}`}>
-            Competency Averages
-          </h3>
-          {Object.entries(data?.competencyAverages || {}).map(([key, value]) => (
-            <ScoreCard
-              key={key}
-              label={key.charAt(0).toUpperCase() + key.slice(1)}
-              score={value}
-            />
-          ))}
-        </div>
-      </div>
-
+          {/* ── Bottom row ── */}
+          {(data?.weakAreas?.length > 0 || Object.keys(data?.competencyAverages || {}).length > 0) && (
+            <div className="grid lg:grid-cols-2 gap-8">
+              {data?.weakAreas?.length > 0 && (
+                <div className="card">
+                  <h3 className={`font-bold mb-4 ${isDark ? 'text-white' : 'text-ink-900'}`}>
+                    Weak Area Frequency
+                  </h3>
+                  <div className="h-48">
+                    <Bar data={weakAreaData} options={barOptions} />
+                  </div>
+                </div>
+              )}
+              {Object.keys(data?.competencyAverages || {}).length > 0 && (
+                <div className="space-y-4">
+                  <h3 className={`font-bold ${isDark ? 'text-white' : 'text-ink-900'}`}>
+                    Competency Averages
+                  </h3>
+                  {Object.entries(data?.competencyAverages || {}).map(([key, value]) => (
+                    <ScoreCard
+                      key={key}
+                      label={key.charAt(0).toUpperCase() + key.slice(1)}
+                      score={value}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

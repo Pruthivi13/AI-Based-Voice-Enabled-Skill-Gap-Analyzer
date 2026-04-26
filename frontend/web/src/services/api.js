@@ -148,6 +148,7 @@ export const fetchAnalytics = () => request('GET', '/analytics');
 // ── Targeted Practice ─────────────────────────────────────────────────────────
 export const fetchWeakSkillPrescription = () => request('GET', '/analytics/prescription');
 export const createTargetedSession = (payload) => request('POST', '/sessions/targeted', payload);
+export const fetchRoleProgress = () => request('GET', '/analytics/role-progress');
 
 // ── Learning Resources ────────────────────────────────────────────────────────
 export const fetchResources = () => request('GET', '/resources');
