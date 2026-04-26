@@ -166,6 +166,7 @@ model Response {
   questionId      String
   answerOrder     Int
   transcript      String?
+  notes           String?
   durationSeconds Int?
   submittedAt     DateTime         @default(now())
   createdAt       DateTime         @default(now())

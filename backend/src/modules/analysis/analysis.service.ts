@@ -178,6 +178,7 @@ export const getSessionReview = async (userId: string, sessionId: string) => {
       id: r.question.id,
       content: r.question.content,
       transcript: r.transcript,
+      notes: r.notes,
       score: r.analysis?.overallScore ?? null,
       feedback: r.analysis?.feedbackJson ?? null,
     })),

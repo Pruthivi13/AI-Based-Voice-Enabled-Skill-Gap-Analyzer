@@ -216,3 +216,10 @@ export const deleteBookmark = (bookmarkId) =>
 
 export const fetchBookmarkStatus = (questionIds = []) =>
   request('GET', `/bookmarks/status?ids=${questionIds.join(',')}`);
+
+// ── Notes ─────────────────────────────────────────────────────────────────────
+export const saveNote = (sessionId, questionId, notes) =>
+  request('PUT', `/sessions/${sessionId}/questions/${questionId}/notes`, { notes });
+
+export const fetchNote = (sessionId, questionId) =>
+  request('GET', `/sessions/${sessionId}/questions/${questionId}/notes`);
