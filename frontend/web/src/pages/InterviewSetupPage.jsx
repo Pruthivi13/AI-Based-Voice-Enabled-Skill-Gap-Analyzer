@@ -70,6 +70,15 @@ export default function InterviewSetupPage() {
     }
   }, []);
 
+  // Pre-fill role when navigating from the RoleProgressWidget "Practice again" button
+  useEffect(() => {
+    const prefill = sessionStorage.getItem('prefill_role');
+    if (prefill) {
+      setRole(prefill);
+      sessionStorage.removeItem('prefill_role');
+    }
+  }, []);
+
   const handleResume = async () => {
     try {
       setLoading(true);

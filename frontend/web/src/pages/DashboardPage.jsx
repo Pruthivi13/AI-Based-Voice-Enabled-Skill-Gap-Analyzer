@@ -7,6 +7,7 @@ import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
 import WeakSkillInsightCard from '../components/WeakSkillInsightCard';
 import TargetedPracticeModal from '../components/TargetedPracticeModal';
+import RoleProgressWidget from '../components/RoleProgressWidget';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
 import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
@@ -1514,10 +1515,10 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Bottom Row: Recent Sessions + Quick Actions ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 20 }}>
+      {/* ── Bottom Row: Recent Sessions | Quick Actions | Role Progress ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr 2fr', gap: 20, alignItems: 'stretch' }}>
         {/* Recent Sessions */}
-        <div style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 20, padding: '24px 28px' }}>
+        <div style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 20, padding: '24px 28px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: headColor }}>Recent Sessions</h3>
             <button
@@ -1529,7 +1530,7 @@ export default function DashboardPage() {
           </div>
 
           {recentSessions.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '32px 0' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
               <p style={{ color: subColor, fontSize: 14 }}>No sessions yet. Start your first practice!</p>
               <button
                 onClick={() => navigate('/setup')}
@@ -1596,11 +1597,11 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick Actions + Stats */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
           {/* Quick Actions */}
-          <div style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 20, padding: '24px 24px' }}>
+          <div style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 20, padding: '24px 24px', flex: 1, display: 'flex', flexDirection: 'column' }}>
             <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 800, color: headColor }}>Quick Actions</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
               {[
                 { label: '🎯 Start Interview', onClick: () => navigate('/setup'), primary: true },
                 { label: '📅 Schedule', onClick: () => setShowSchedule(true) },
@@ -1611,12 +1612,12 @@ export default function DashboardPage() {
                   key={i}
                   onClick={onClick}
                   style={{
-                    width: '100%', padding: '10px 16px', borderRadius: 10,
+                    width: '100%', padding: '12px 16px', borderRadius: 10,
                     border: primary ? 'none' : `1px solid ${cardBorder}`,
                     background: primary ? '#f97316' : 'transparent',
                     color: primary ? '#fff' : headColor,
                     fontWeight: 600, fontSize: 13, cursor: 'pointer',
-                    textAlign: 'left',
+                    textAlign: 'left', flex: 1,
                     transition: 'all 0.15s',
                   }}
                   onMouseEnter={e => { if (!primary) e.target.style.background = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'; }}
@@ -1653,6 +1654,11 @@ export default function DashboardPage() {
               </button>
             </div>
           )}
+        </div>
+
+        {/* ── Role Progress Widget ── */}
+        <div style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 20, padding: '24px 20px' }}>
+          <RoleProgressWidget />
         </div>
       </div>
 
