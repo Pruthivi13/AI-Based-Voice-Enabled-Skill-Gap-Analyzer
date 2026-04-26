@@ -67,6 +67,7 @@ model User {
   sessions      InterviewSession[]
   uploads       Upload[]
   bookmarks     BookmarkedQuestion[]
+  snapshots     SkillSnapshot[]
 
   @@index([supabaseUid])
   @@index([email])
@@ -130,6 +131,7 @@ model InterviewSession {
   roadmap         Roadmap?
   courses         CourseRecommendation?
   uploads         Upload[]
+  snapshot        SkillSnapshot?
 
   @@index([userId])
   @@index([status])
@@ -278,4 +280,24 @@ model BookmarkedQuestion {
   @@unique([userId, questionId])
   @@index([userId])
   @@index([questionId])
+}
+
+model SkillSnapshot {
+  id                 String           @id @default(cuid())
+  userId             String
+  sessionId          String           @unique
+  date               DateTime         @default(now())
+  clarityScore       Float?
+  fluencyScore       Float?
+  confidenceScore    Float?
+  relevanceScore     Float?
+  technicalScore     Float?
+  grammarScore       Float?
+  overallScore       Float?
+
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session            InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([date])
 }

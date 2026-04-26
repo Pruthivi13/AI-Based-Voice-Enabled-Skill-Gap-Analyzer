@@ -222,3 +222,64 @@ export const resumeSession = async (
     next(err);
   }
 };
+
+export const createTargetedSession = async (
+  req: any,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { generateQuestionsFromAI } = await import('../../services/questionGenerator.service');
+    const prismaDb = (await import('../../config/prisma')).default;
+
+    const { interviewType, targetRole, difficulty, questionCount, focusAreas = [] } = req.body;
+
+    const focusedRole = focusAreas.length > 0
+      ? `${targetRole} (focus on: ${focusAreas.join(', ')})`
+      : targetRole;
+
+    let questions: any[];
+    try {
+      questions = await generateQuestionsFromAI(focusedRole, 'JUNIOR', interviewType, Number(questionCount) || 5);
+    } catch {
+      questions = await (prismaDb as any).question.findMany({
+        where: { isActive: true, category: interviewType as any },
+        take: Number(questionCount) || 5,
+      });
+    }
+
+    const savedQuestions = await Promise.all(
+      questions.map(async (q: any) =>
+        (prismaDb as any).question.upsert({
+          where: { id: q.id },
+          update: { hints: q.hints ?? null },
+          create: {
+            id: q.id,
+            content: q.content,
+            category: (q.category || interviewType) as any,
+            difficulty: (q.difficulty || difficulty) as any,
+            timeLimitSeconds: q.timeLimitSeconds || 120,
+            hints: q.hints ?? null,
+            isActive: true,
+          },
+        })
+      )
+    );
+
+    const session = await (prismaDb as any).interviewSession.create({
+      data: {
+        userId:        req.user.id,
+        interviewType: interviewType as any,
+        targetRole,
+        difficulty:    difficulty as any,
+        questionCount: savedQuestions.length,
+        title: `Targeted: ${focusAreas.join(' & ') || targetRole} Practice`,
+        questionsJson: savedQuestions as any,
+      },
+    });
+
+    return sendSuccess(res, { sessionId: session.id, status: session.status, questions: savedQuestions, isTargeted: true, focusAreas }, 201);
+  } catch (err) {
+    next(err);
+  }
+};

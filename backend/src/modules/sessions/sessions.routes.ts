@@ -10,6 +10,7 @@ import {
   createSessionWithResume,
   pauseSession,
   resumeSession,
+  createTargetedSession,
 } from './sessions.controller';
 import { authMiddleware } from '../../middleware/auth.middleware';
 import { strictRateLimit } from '../../middleware/rateLimit.middleware';
@@ -46,5 +47,6 @@ router.post(
 );
 router.post('/sessions/:id/pause',  authMiddleware, pauseSession);
 router.post('/sessions/:id/resume', authMiddleware, resumeSession);
+router.post('/sessions/targeted',   authMiddleware, strictRateLimit, createTargetedSession);
 
 export default router;

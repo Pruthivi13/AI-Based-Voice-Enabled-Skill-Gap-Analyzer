@@ -4,11 +4,12 @@
  * Maps to PRD §9.25 Analytics & Insights.
  * Features:
  *   • Summary stats (total sessions, avg score, most improved, focus area)
- *   • Score trend line chart (Chart.js)
+ *   • Skill Gap Timeline chart (multi-line per-skill trend)  ← NEW
+ *   • Score trend line chart (Chart.js — overall only)
  *   • Weak area frequency bars
  *   • Competency average cards
  */
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -23,6 +24,7 @@ import {
 import { Line, Bar } from 'react-chartjs-2';
 import { fetchAnalytics } from '../services/api';
 import ScoreCard from '../components/ScoreCard';
+import SkillTimelineChart from '../components/SkillTimelineChart';
 import LoadingState from '../components/LoadingState';
 import { useTheme } from '../context/ThemeContext';
 
@@ -39,7 +41,7 @@ ChartJS.register(
 
 export default function AnalyticsPage() {
   const { isDark } = useTheme();
-  const [data, setData] = useState(null);
+  const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -50,24 +52,25 @@ export default function AnalyticsPage() {
   }, []);
 
   const axisTextColor = isDark ? 'rgba(255,255,255,0.5)' : '#78716c';
-  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
-  const labelColor = isDark ? 'rgba(255,255,255,0.7)' : '#44403c';
+  const gridColor     = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+  const labelColor    = isDark ? 'rgba(255,255,255,0.7)' : '#44403c';
 
+  // ── Session score trend ───────────────────────────────────────────────────
   const trendData = useMemo(
     () => ({
       labels: data?.scoreTrend?.map((p) => p.label) || [],
       datasets: [
         {
-          label: 'Average Score',
-          data: data?.scoreTrend?.map((p) => p.score) || [],
-          borderColor: '#f97316',
-          backgroundColor: 'rgba(249,115,22,0.1)',
-          fill: true,
-          tension: 0.4,
+          label:              'Average Score',
+          data:               data?.scoreTrend?.map((p) => p.score) || [],
+          borderColor:        '#f97316',
+          backgroundColor:    'rgba(249,115,22,0.1)',
+          fill:               true,
+          tension:            0.4,
           pointBackgroundColor: '#f97316',
-          pointBorderColor: isDark ? '#1e293b' : '#fff',
-          pointBorderWidth: 2,
-          pointRadius: 5,
+          pointBorderColor:   isDark ? '#1e293b' : '#fff',
+          pointBorderWidth:   2,
+          pointRadius:        5,
         },
       ],
     }),
@@ -76,38 +79,42 @@ export default function AnalyticsPage() {
 
   const trendOptions = useMemo(
     () => ({
-      responsive: true,
+      responsive:          true,
       maintainAspectRatio: false,
       scales: {
         y: {
           beginAtZero: true,
           max: 10,
           ticks: { color: axisTextColor },
-          grid: { color: gridColor },
+          grid:  { color: gridColor },
         },
-        x: { ticks: { color: axisTextColor }, grid: { display: false } },
+        x: {
+          ticks: { color: axisTextColor },
+          grid:  { display: false },
+        },
       },
       plugins: {
         legend: { display: false },
         tooltip: {
           backgroundColor: isDark ? '#334155' : '#1c1917',
-          cornerRadius: 8,
-          padding: 10,
+          cornerRadius:    8,
+          padding:         10,
         },
       },
     }),
     [isDark, axisTextColor, gridColor]
   );
 
+  // ── Weak area bar ─────────────────────────────────────────────────────────
   const weakAreaData = useMemo(
     () => ({
       labels: data?.weakAreas?.map((w) => w.label) || [],
       datasets: [
         {
-          label: 'Frequency',
-          data: data?.weakAreas?.map((w) => w.count) || [],
+          label:           'Frequency',
+          data:            data?.weakAreas?.map((w) => w.count) || [],
           backgroundColor: ['#f97316', '#fb923c', '#fdba74', '#fed7aa'],
-          borderRadius: 8,
+          borderRadius:    8,
         },
       ],
     }),
@@ -116,18 +123,18 @@ export default function AnalyticsPage() {
 
   const barOptions = useMemo(
     () => ({
-      responsive: true,
+      responsive:          true,
       maintainAspectRatio: false,
-      indexAxis: 'y',
+      indexAxis:           'y',
       scales: {
         x: {
           beginAtZero: true,
           ticks: { color: axisTextColor },
-          grid: { color: gridColor },
+          grid:  { color: gridColor },
         },
         y: {
           ticks: { color: labelColor, font: { weight: '600' } },
-          grid: { display: false },
+          grid:  { display: false },
         },
       },
       plugins: { legend: { display: false } },
@@ -138,53 +145,59 @@ export default function AnalyticsPage() {
   if (loading) return <LoadingState message="Loading analytics..." />;
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10">
-      <h1 className="mb-2">Analytics & Insights</h1>
-      <p className={`mb-10 ${isDark ? 'text-white/50' : 'text-ink-500'}`}>
-        Track your performance trends and identify areas for improvement.
-      </p>
+    <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+      {/* ── Page header ── */}
+      <div>
+        <h1 className="mb-1">Analytics &amp; Insights</h1>
+        <p className={isDark ? 'text-white/50' : 'text-ink-500'}>
+          Track your performance trends and close skill gaps over time.
+        </p>
+      </div>
+
+      {/* ── Summary stats ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Total Sessions', value: data?.totalSessions ?? 0 },
-          { label: 'Average Score', value: `${data?.averageScore ?? 0}/10` },
-          { label: 'Most Improved', value: data?.mostImproved ?? 'N/A' },
-          { label: 'Focus Area', value: data?.focusArea ?? 'N/A' },
+          { label: 'Average Score',  value: `${data?.averageScore ?? 0}/10` },
+          { label: 'Most Improved',  value: data?.mostImproved ?? '—' },
+          { label: 'Focus Area',     value: data?.focusArea ?? '—' },
         ].map((stat, i) => (
           <div key={i} className="card text-center">
-            <p
-              className={`text-xs font-bold uppercase tracking-wider mb-1 ${isDark ? 'text-white/40' : 'text-ink-500'}`}
-            >
+            <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${
+              isDark ? 'text-white/40' : 'text-ink-500'
+            }`}>
               {stat.label}
             </p>
-            <p
-              className={`text-2xl font-extrabold ${isDark ? 'text-white' : 'text-ink-900'}`}
-            >
+            <p className={`text-2xl font-extrabold ${
+              isDark ? 'text-white' : 'text-ink-900'
+            }`}>
               {stat.value}
             </p>
           </div>
         ))}
       </div>
 
-      {/* Score Trend */}
-      <section className="card mb-10">
-        <h3
-          className={`font-bold mb-4 ${isDark ? 'text-white' : 'text-ink-900'}`}
-        >
-          Score Trend Over Time
+      {/* ── SKILL GAP TIMELINE ── */}
+      <SkillTimelineChart
+        data={data?.skillTimeline ?? []}
+        delta={data?.skillDelta}
+      />
+
+      {/* ── Session score trend ── */}
+      <section className="card">
+        <h3 className={`font-bold mb-4 ${isDark ? 'text-white' : 'text-ink-900'}`}>
+          Session Score Trend
         </h3>
         <div className="h-64">
           <Line data={trendData} options={trendOptions} />
         </div>
       </section>
 
-      {/* Bottom Row */}
+      {/* ── Bottom row ── */}
       <div className="grid lg:grid-cols-2 gap-8">
         <div className="card">
-          <h3
-            className={`font-bold mb-4 ${isDark ? 'text-white' : 'text-ink-900'}`}
-          >
+          <h3 className={`font-bold mb-4 ${isDark ? 'text-white' : 'text-ink-900'}`}>
             Weak Area Frequency
           </h3>
           <div className="h-48">
@@ -196,17 +209,16 @@ export default function AnalyticsPage() {
           <h3 className={`font-bold ${isDark ? 'text-white' : 'text-ink-900'}`}>
             Competency Averages
           </h3>
-          {Object.entries(data?.competencyAverages || {}).map(
-            ([key, value]) => (
-              <ScoreCard
-                key={key}
-                label={key.charAt(0).toUpperCase() + key.slice(1)}
-                score={value}
-              />
-            )
-          )}
+          {Object.entries(data?.competencyAverages || {}).map(([key, value]) => (
+            <ScoreCard
+              key={key}
+              label={key.charAt(0).toUpperCase() + key.slice(1)}
+              score={value}
+            />
+          ))}
         </div>
       </div>
+
     </div>
   );
 }
