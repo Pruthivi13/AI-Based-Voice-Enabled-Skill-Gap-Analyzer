@@ -7,6 +7,7 @@ import TranscriptPanel from '../components/TranscriptPanel';
 import RecordingControls from '../components/RecordingControls';
 import AnimatedHintsButton from '../components/AnimatedHintsButton';
 import BookmarkButton from '../components/BookmarkButton';
+import NoteEditor from '../components/NoteEditor';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const SKIPPED_KEY  = 'skippedQuestions';
@@ -91,6 +92,7 @@ export default function LiveInterviewPage() {
   const [timeLeft, setTimeLeft]                 = useState(null);
   const [liveStream, setLiveStream]             = useState(null);
   const [showPauseConfirm, setShowPauseConfirm] = useState(false);
+  const [currentNote, setCurrentNote] = useState('');
 
   // Follow-up state
   const [followupQuestions, setFollowupQuestions] = useState([]);
@@ -144,6 +146,7 @@ export default function LiveInterviewPage() {
     setIsFollowupActive(false);
     setFollowupQuestions([]);
     setTranscript('');
+    setCurrentNote('');
     wsRef.current?.close();
 
     const nextIndex = idx + 1;
@@ -431,11 +434,21 @@ export default function LiveInterviewPage() {
                 total={questions.length}
                 dark
                 actions={
-                  <BookmarkButton
-                    questionId={questions[currentIndex].id}
-                    size="sm"
-                    showLabel
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <BookmarkButton
+                      questionId={questions[currentIndex].id}
+                      size="sm"
+                      showLabel
+                    />
+                    <NoteEditor
+                      sessionId={sessionId}
+                      questionId={questions[currentIndex].id}
+                      initialNote={currentNote}
+                      mode="inline"
+                      isDark={true}
+                      onSave={setCurrentNote}
+                    />
+                  </div>
                 }
               />
               {isSkipped(questions[currentIndex]?.id) && (

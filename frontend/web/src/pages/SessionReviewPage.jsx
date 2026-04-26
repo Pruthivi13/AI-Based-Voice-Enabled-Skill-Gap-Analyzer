@@ -19,6 +19,8 @@ import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
 import { useTheme } from '../context/ThemeContext';
 import ClockIcon from '../components/ui/clock-icon';
+import NoteDisplay from '../components/NoteDisplay';
+import NoteEditor from '../components/NoteEditor';
 
 export default function SessionReviewPage() {
   const { id } = useParams();
@@ -125,15 +127,24 @@ export default function SessionReviewPage() {
                   {q.content}
                 </p>
               </div>
-              <div className="text-right flex-shrink-0">
-                <p className="text-2xl font-extrabold text-primary-500">
-                  {q.score ?? 'N/A'}
-                </p>
-                <p
-                  className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-white/40' : 'text-ink-500'}`}
-                >
-                  Score
-                </p>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
+                <div className="text-right">
+                  <p className="text-2xl font-extrabold text-primary-500">
+                    {q.score ?? 'N/A'}
+                  </p>
+                  <p
+                    className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-white/40' : 'text-ink-500'}`}
+                  >
+                    Score
+                  </p>
+                </div>
+                <NoteEditor
+                  sessionId={id}
+                  questionId={q.id}
+                  initialNote={q.notes || ''}
+                  mode="expanded"
+                  isDark={isDark}
+                />
               </div>
             </div>
 
@@ -154,8 +165,10 @@ export default function SessionReviewPage() {
               </div>
             )}
 
+            <NoteDisplay note={q.notes} isDark={isDark} />
+
             {Array.isArray(q.feedback) && q.feedback.length > 0 && (
-              <div>
+              <div className="mt-3">
                 <p
                   className={`text-xs font-bold uppercase tracking-wider mb-2 ${isDark ? 'text-white/40' : 'text-ink-500'}`}
                 >
