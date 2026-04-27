@@ -231,3 +231,15 @@ export const saveNote = (sessionId, questionId, notes) =>
 
 export const fetchNote = (sessionId, questionId) =>
   request('GET', `/sessions/${sessionId}/questions/${questionId}/notes`);
+
+// ── Question Difficulty Feedback ──────────────────────────────────────────────
+export const submitDifficultyRating = (sessionId, questionId, difficultyRating) =>
+  request('POST', `/sessions/${sessionId}/questions/${questionId}/feedback`, {
+    difficultyRating,
+  });
+
+export const fetchFeedbackStats = (questionId) =>
+  request('GET', `/questions/${questionId}/feedback-stats`);
+
+export const fetchMyRating = (sessionId, questionId) =>
+  request('GET', `/sessions/${sessionId}/questions/${questionId}/my-rating`);

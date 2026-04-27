@@ -28,6 +28,12 @@ enum Difficulty {
   HARD
 }
 
+enum DifficultyRating {
+  TOO_EASY
+  JUST_RIGHT
+  TOO_HARD
+}
+
 enum SessionStatus {
   CREATED
   IN_PROGRESS
@@ -68,6 +74,7 @@ model User {
   uploads       Upload[]
   bookmarks     BookmarkedQuestion[]
   snapshots     SkillSnapshot[]
+  questionFeedbacks   QuestionFeedback[]
 
   @@index([supabaseUid])
   @@index([email])
@@ -155,6 +162,12 @@ model Question {
 
   responses        Response[]
   bookmarks        BookmarkedQuestion[]
+  feedbacks        QuestionFeedback[]
+
+  tooEasyCount        Int      @default(0)
+  justRightCount      Int      @default(0)
+  tooHardCount        Int      @default(0)
+  adjustedDifficulty  String?
 
   @@index([category])
   @@index([role])
@@ -300,4 +313,20 @@ model SkillSnapshot {
 
   @@index([userId])
   @@index([date])
+}
+
+model QuestionFeedback {
+  id               String           @id @default(cuid())
+  questionId       String
+  userId           String
+  sessionId        String
+  difficultyRating DifficultyRating
+  createdAt        DateTime         @default(now())
+
+  question         Question         @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId, sessionId])
+  @@index([questionId])
+  @@index([userId])
 }

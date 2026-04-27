@@ -23,6 +23,7 @@ import scheduleRoutes from './modules/schedule/schedule.routes';
 import bookmarksRoutes from './modules/bookmarks/bookmarks.routes';
 import notesRoutes from './modules/notes/notes.routes';
 import warmupRoutes from './modules/warmup/warmup.routes';
+import questionFeedbackRoutes from './modules/questions/questionFeedback.routes';
 
 const app = express();
 
@@ -66,6 +67,7 @@ app.use('/api', scheduleRoutes);
 app.use('/api', bookmarksRoutes);
 app.use('/api', notesRoutes);
 app.use('/api', warmupRoutes);
+app.use('/api', questionFeedbackRoutes);
 
 app.use(errorMiddleware);
 

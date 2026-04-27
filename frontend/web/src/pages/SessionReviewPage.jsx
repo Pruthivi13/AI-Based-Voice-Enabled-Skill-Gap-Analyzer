@@ -11,7 +11,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { fetchSessionReview, fetchSessionRoadmap } from '../services/api';
+import { fetchSessionReview, fetchSessionRoadmap, fetchFeedbackStats } from '../services/api';
 import RoadmapSection from '../components/RoadmapSection';
 import CourseRecommendations from '../components/CourseRecommendations';
 import StatusChip from '../components/StatusChip';
@@ -21,6 +21,39 @@ import { useTheme } from '../context/ThemeContext';
 import ClockIcon from '../components/ui/clock-icon';
 import NoteDisplay from '../components/NoteDisplay';
 import NoteEditor from '../components/NoteEditor';
+
+// ── Community Difficulty Badge ───────────────────────────────────────────────
+function CommunityDifficultyBadge({ questionId }) {
+  const [stats, setStats] = React.useState(null);
+
+  React.useEffect(() => {
+    fetchFeedbackStats(questionId)
+      .then(setStats)
+      .catch(() => {});
+  }, [questionId]);
+
+  if (!stats || !stats.total || stats.total < 3) return null;
+
+  const pcts = stats.percentages || {};
+  const dominant =
+    pcts.tooEasy > 50 ? { label: 'Mostly found Easy', color: '#34d399', emoji: '😴' }
+    : pcts.tooHard > 50 ? { label: 'Mostly found Hard', color: '#f87171', emoji: '🔥' }
+    : { label: 'Balanced difficulty', color: '#f97316', emoji: '🎯' };
+
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      fontSize: 10, fontWeight: 600,
+      color: dominant.color,
+      background: `${dominant.color}12`,
+      border: `1px solid ${dominant.color}25`,
+      padding: '3px 9px', borderRadius: 99,
+      marginLeft: 6,
+    }}>
+      {dominant.emoji} {dominant.label} · {stats.total} ratings
+    </span>
+  );
+}
 
 export default function SessionReviewPage() {
   const { id } = useParams();
@@ -120,6 +153,7 @@ export default function SessionReviewPage() {
                     Question {idx + 1}
                   </span>
                   <StatusChip status={getStatus(q.score)} />
+                  <CommunityDifficultyBadge questionId={q.id} />
                 </div>
                 <p
                   className={`font-semibold ${isDark ? 'text-white' : 'text-ink-900'}`}
