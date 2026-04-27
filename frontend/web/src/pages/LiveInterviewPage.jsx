@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import { finishSession, saveTranscript, pauseSession } from '../services/api';
 import { generateFollowupQuestions } from '../services/api';
 import QuestionCard from '../components/QuestionCard';
@@ -8,6 +9,7 @@ import RecordingControls from '../components/RecordingControls';
 import AnimatedHintsButton from '../components/AnimatedHintsButton';
 import BookmarkButton from '../components/BookmarkButton';
 import NoteEditor from '../components/NoteEditor';
+import DifficultyRatingWidget from '../components/DifficultyRatingWidget';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const SKIPPED_KEY  = 'skippedQuestions';
@@ -41,7 +43,16 @@ function FollowupPanel({ followups, loading, onSkip, onAnswer }) {
       </div>
     );
   }
-  if (!followups || followups.length === 0) return null;
+  if (!followups || followups.length === 0) {
+    return (
+      <div className="w-full mb-6 rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
+        <p className="text-white font-semibold text-lg mb-4">Response recorded! Ready for the next one?</p>
+        <button onClick={onSkip} className="btn-primary text-sm py-2 px-6">
+          Next Question →
+        </button>
+      </div>
+    );
+  }
   const fq = followups[0];
   return (
     <div className="w-full mb-6 rounded-2xl border border-primary-500/40 bg-primary-500/5 p-5">
@@ -99,6 +110,8 @@ export default function LiveInterviewPage() {
   const [followupLoading, setFollowupLoading]     = useState(false);
   const [showFollowup, setShowFollowup]           = useState(false);
   const [isFollowupActive, setIsFollowupActive]   = useState(false);
+  const [showRating, setShowRating]               = useState(false);
+  const [ratedQuestionId, setRatedQuestionId]     = useState(null);
   const pendingTranscriptRef = useRef('');
   const pendingIndexRef      = useRef(initialIndex);
 
@@ -144,6 +157,8 @@ export default function LiveInterviewPage() {
   const advanceOrFinish = useCallback(async (idx) => {
     setShowFollowup(false);
     setIsFollowupActive(false);
+    setShowRating(false);
+    setRatedQuestionId(null);
     setFollowupQuestions([]);
     setTranscript('');
     setCurrentNote('');
@@ -209,7 +224,10 @@ export default function LiveInterviewPage() {
   const fetchFollowups = useCallback(async (finalTranscript, idx) => {
     const q = questions[idx];
     if (!q || !finalTranscript || finalTranscript.length < 15) {
-      await advanceOrFinish(idx); return;
+      setShowFollowup(true);
+      setFollowupLoading(false);
+      setFollowupQuestions([]);
+      return;
     }
     setFollowupLoading(true);
     setShowFollowup(true);
@@ -221,9 +239,8 @@ export default function LiveInterviewPage() {
       );
       const fqs = data?.followups ?? [];
       setFollowupQuestions(fqs);
-      if (fqs.length === 0) await advanceOrFinish(idx);
     } catch {
-      await advanceOrFinish(idx);
+      setFollowupQuestions([]);
     } finally {
       setFollowupLoading(false);
     }
@@ -258,6 +275,9 @@ export default function LiveInterviewPage() {
         const idx = currentIndexRef.current;
         const qId = questions[idx]?.id;
         try { await saveTranscript(sessionId, qId, msg.text, idx + 1); } catch {}
+
+        setShowRating(true);
+        setRatedQuestionId(questions[idx]?.id);
 
         if (isFollowupActive) {
           await advanceOrFinish(pendingIndexRef.current);
@@ -509,6 +529,23 @@ export default function LiveInterviewPage() {
           {status === 'Transcribing' ? '🧠 Transcribing...' : '📤 Saving...'}
         </div>
       ) : null}
+
+      {/* ── Difficulty Rating (appears after answer) ── */}
+      <AnimatePresence>
+        {showRating && ratedQuestionId && !isFollowupActive && (
+          <div style={{ width: '100%', maxWidth: 420, marginTop: 8 }}>
+            <DifficultyRatingWidget
+              sessionId={sessionId}
+              questionId={ratedQuestionId}
+              autoShow
+              onRate={(rating) => {
+                console.log('Rated:', rating);
+                // Widget self-manages, just log or track analytics here
+              }}
+            />
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* ── Progress dots ── */}
       <div className="flex gap-2 mt-6">

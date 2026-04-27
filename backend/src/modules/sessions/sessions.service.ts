@@ -39,7 +39,10 @@ export const createSession = async (userId: string, data: any) => {
     questions = await prisma.question.findMany({
       where: {
         isActive: true,
-        difficulty,
+        OR: [
+          { adjustedDifficulty: difficulty },
+          { difficulty, adjustedDifficulty: null }
+        ],
         ...(category && { category }),
       },
       take: questionCount,
@@ -148,7 +151,10 @@ export const getSessionQuestions = async (
   const questions = await prisma.question.findMany({
     where: {
       isActive: true,
-      difficulty: session.difficulty,
+      OR: [
+        { adjustedDifficulty: session.difficulty },
+        { difficulty: session.difficulty, adjustedDifficulty: null }
+      ],
       ...(category && { category }),
     },
     take: session.questionCount,
