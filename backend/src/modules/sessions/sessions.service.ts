@@ -61,14 +61,18 @@ export const createSession = async (userId: string, data: any) => {
         where: { id: q.id },
         update: {
           hints: q.hints || null,
+          expectedKeywords: q.expectedKeyPoints || null,
+          referenceAnswer: q.referenceAnswer || null,
         },
         create: {
           id: q.id,
           content: q.content,
-          category: (q.category || interviewType) as any,
-          difficulty: (q.difficulty || difficulty) as any,
+          category: (['TECHNICAL', 'HR', 'COMMUNICATION', 'BEHAVIORAL'].includes(String(q.category).toUpperCase()) ? String(q.category).toUpperCase() : (['TECHNICAL', 'HR', 'COMMUNICATION', 'BEHAVIORAL'].includes(interviewType) ? interviewType : 'TECHNICAL')) as any,
+          difficulty: (['EASY', 'MEDIUM', 'HARD'].includes(String(q.difficulty).toUpperCase()) ? String(q.difficulty).toUpperCase() : (['EASY', 'MEDIUM', 'HARD'].includes(difficulty) ? difficulty : 'MEDIUM')) as any,
           timeLimitSeconds: q.timeLimitSeconds || 120,
           hints: q.hints || null,
+          expectedKeywords: q.expectedKeyPoints || null,
+          referenceAnswer: q.referenceAnswer || null,
           isActive: true,
         },
       });

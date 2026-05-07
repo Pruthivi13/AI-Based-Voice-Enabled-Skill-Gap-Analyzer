@@ -1,89 +1,222 @@
-from faster_whisper import WhisperModel
-import tempfile
+"""
+Speech-to-text service.
+
+Primary path:
+- local faster-whisper, no per-call cost
+
+Fallback path:
+- Groq Whisper-compatible transcription API, when GROQ_API_KEY is set
+"""
+
+from __future__ import annotations
+
+import asyncio
 import os
-import httpx
+import shutil
 import subprocess
+import tempfile
+from pathlib import Path
+from typing import Optional
+
+import httpx
+from dotenv import load_dotenv
+
 from utils.logger import setup_logger
+
+load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
 
 logger = setup_logger(__name__)
 
-model = None
+_model = None
+
 
 def get_model():
-    global model
-    if model is None:
-        logger.info("Loading faster-whisper model...")
-        # int8 = faster on CPU, less memory
-        model = WhisperModel("base", device="cpu", compute_type="int8")
-        logger.info("faster-whisper model loaded!")
-    return model
+    """Lazy-load faster-whisper once and reuse it across requests."""
+    global _model
+    if _model is None:
+        from faster_whisper import WhisperModel
 
-async def transcribe_audio(audio_url: str) -> str:
-    logger.info(f"Transcribing audio from: {audio_url}")
+        model_size = os.getenv("WHISPER_MODEL_SIZE", "base")
+        device = os.getenv("WHISPER_DEVICE", "cpu")
+        compute_type = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
 
-    # Download audio file
-    async with httpx.AsyncClient() as client:
-        response = await client.get(audio_url, timeout=30.0)
-        logger.info(f"Download status: {response.status_code}, size: {len(response.content)} bytes")
-        if response.status_code != 200:
-            raise Exception(f"Failed to download audio: {response.status_code}")
-        audio_data = response.content
+        logger.info(
+            "Loading faster-whisper model=%s device=%s compute_type=%s",
+            model_size,
+            device,
+            compute_type,
+        )
+        _model = WhisperModel(model_size, device=device, compute_type=compute_type)
+        logger.info("faster-whisper model loaded")
+    return _model
 
-    if len(audio_data) < 100:
-        raise Exception(f"Audio file too small: {len(audio_data)} bytes")
 
-    # Save original webm file
-    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
-        tmp.write(audio_data)
-        tmp_path = tmp.name
+def _ffmpeg_available() -> bool:
+    return shutil.which("ffmpeg") is not None
 
-    logger.info(f"Saved to temp file: {tmp_path}")
 
-    # Convert webm to wav using ffmpeg
-    wav_path = tmp_path.replace('.webm', '.wav')
+def _ffmpeg_executable() -> str | None:
+    system_ffmpeg = shutil.which("ffmpeg")
+    if system_ffmpeg:
+        return system_ffmpeg
+    try:
+        import imageio_ffmpeg
+
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return None
+
+
+def convert_to_wav(audio_path: str | Path) -> str:
+    """
+    Convert any browser/API audio format to a mono 16 kHz WAV.
+    Uses ffmpeg through pydub when possible, with direct ffmpeg fallback.
+    """
+    source = Path(audio_path)
+    if not source.exists():
+        raise FileNotFoundError(f"Audio file not found: {source}")
+
+    wav_path = str(source.with_suffix(".wav"))
+    if source.suffix.lower() == ".wav":
+        return str(source)
 
     try:
-        logger.info("Converting webm to wav...")
-        result = subprocess.run(
-            ['ffmpeg', '-i', tmp_path, '-ar', '16000', '-ac', '1', '-y', wav_path],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
+        from pydub import AudioSegment
 
-        if result.returncode != 0:
-            raise Exception(f"ffmpeg failed: {result.stderr[-200:]}")
+        ffmpeg_path = _ffmpeg_executable()
+        if ffmpeg_path:
+            AudioSegment.converter = ffmpeg_path
 
-        if not os.path.exists(wav_path) or os.path.getsize(wav_path) < 100:
-            raise Exception("WAV file not created or too small")
+        audio = AudioSegment.from_file(source)
+        audio = audio.set_channels(1).set_frame_rate(16000).normalize()
+        audio.export(wav_path, format="wav")
+        return wav_path
+    except Exception as pydub_error:
+        logger.warning("pydub conversion failed, trying ffmpeg: %s", pydub_error)
 
-        logger.info(f"WAV file size: {os.path.getsize(wav_path)} bytes")
-        logger.info("Running faster-whisper...")
+    ffmpeg_path = _ffmpeg_executable()
+    if not ffmpeg_path:
+        raise RuntimeError("ffmpeg is required to convert non-WAV audio files")
 
-        whisper_model = get_model()
-
-        # faster-whisper returns segments (generator) + info
-        segments, info = whisper_model.transcribe(
+    result = subprocess.run(
+        [
+            ffmpeg_path,
+            "-i",
+            str(source),
+            "-ar",
+            "16000",
+            "-ac",
+            "1",
+            "-y",
             wav_path,
-            beam_size=1,          # faster, slightly less accurate
-            language="en",        # skip language detection, saves time
-            vad_filter=True,      # skip silent parts automatically
-            vad_parameters=dict(min_silence_duration_ms=500)
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg conversion failed: {result.stderr[-500:]}")
+
+    return wav_path
+
+
+def _local_transcribe(wav_path: str, *, partial: bool = False) -> str:
+    model = get_model()
+    segments, _ = model.transcribe(
+        wav_path,
+        beam_size=1 if partial else 3,
+        language=os.getenv("STT_LANGUAGE", "en"),
+        vad_filter=True,
+        vad_parameters={"min_silence_duration_ms": 500},
+    )
+    return " ".join(segment.text.strip() for segment in segments if segment.text).strip()
+
+
+def _groq_transcribe(audio_path: str) -> str:
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY is not set")
+
+    from groq import Groq
+
+    model = os.getenv("GROQ_STT_MODEL", "whisper-large-v3-turbo")
+    client = Groq(api_key=api_key)
+
+    with open(audio_path, "rb") as audio_file:
+        result = client.audio.transcriptions.create(
+            file=(Path(audio_path).name, audio_file),
+            model=model,
+            response_format="json",
+            language=os.getenv("STT_LANGUAGE", "en"),
         )
 
-        # Join all segments into one transcript
-        transcript = " ".join(segment.text.strip() for segment in segments)
+    transcript = getattr(result, "text", None)
+    if not transcript and isinstance(result, dict):
+        transcript = result.get("text")
+    return (transcript or "").strip()
 
-        logger.info(f"Transcription complete: {transcript[:100]}")
-        logger.info(f"Detected language: {info.language} (probability: {info.language_probability:.2f})")
 
-        return transcript if transcript else "No speech detected"
+def transcribe_audio_file(audio_path: str | Path, *, prefer_local: bool = True) -> str:
+    """
+    Transcribe an audio file using local faster-whisper, then Groq fallback.
+    Returns a plain transcript string.
+    """
+    source = Path(audio_path)
+    wav_path: Optional[str] = None
+    created_wav = False
 
-    except Exception as e:
-        logger.error(f"Transcription error: {str(e)}")
-        raise
+    try:
+        wav_path = convert_to_wav(source)
+        created_wav = Path(wav_path).resolve() != source.resolve()
+
+        if prefer_local and os.getenv("DISABLE_LOCAL_WHISPER", "false").lower() != "true":
+            try:
+                transcript = _local_transcribe(wav_path)
+                if transcript:
+                    return transcript
+                logger.warning("Local Whisper returned an empty transcript")
+            except Exception as local_error:
+                logger.warning("Local Whisper failed, trying Groq STT: %s", local_error)
+
+        transcript = _groq_transcribe(wav_path)
+        if transcript:
+            return transcript
+
+        raise RuntimeError("Speech-to-text returned an empty transcript")
     finally:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-        if os.path.exists(wav_path):
-            os.unlink(wav_path)
+        if created_wav and wav_path and Path(wav_path).exists():
+            Path(wav_path).unlink(missing_ok=True)
+
+
+async def transcribe_audio(audio_url: str) -> str:
+    """
+    Backward-compatible URL transcription used by the Express API.
+    Downloads the audio to a temp file and runs the same STT pipeline.
+    """
+    logger.info("Transcribing audio from URL: %s", audio_url)
+
+    suffix = Path(audio_url.split("?")[0]).suffix or ".webm"
+    tmp_path = None
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(audio_url, timeout=60.0)
+            response.raise_for_status()
+
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(response.content)
+            tmp_path = tmp.name
+
+        if Path(tmp_path).stat().st_size < 100:
+            raise RuntimeError("Downloaded audio file is too small")
+
+        loop = asyncio.get_running_loop()
+        transcript = await loop.run_in_executor(
+            None, lambda: transcribe_audio_file(tmp_path)
+        )
+        return transcript or "No speech detected"
+    finally:
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)

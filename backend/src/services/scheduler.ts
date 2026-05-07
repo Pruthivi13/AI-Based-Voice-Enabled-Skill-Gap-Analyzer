@@ -6,13 +6,13 @@ import { sendReminderEmail, sendStreakAtRiskEmail } from './email.service';
 import { checkAndResetExpiredStreaks } from './streak.service';
 import { logger } from '../utils/logger';
 
+import { env } from '../config/env';
+
 // ── pg-boss uses your existing DATABASE_URL ───────────────────────────────────
 
-const boss = new PgBoss({
-  connectionString: process.env.DATABASE_URL!,
-});
+const boss = new PgBoss(env.DATABASE_URL);
 
-boss.on('error', (err) => logger.error('pg-boss error:', err));
+boss.on('error', (err: any) => logger.error('pg-boss error:', err));
 
 // ── Worker types ──────────────────────────────────────────────────────────────
 

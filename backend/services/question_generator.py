@@ -41,10 +41,13 @@ Rules:
 - For COMMUNICATION: collaboration and stakeholder questions for {target_role}
 - For MIXED: mix of technical and behavioral for {target_role}
 
-For EACH question, provide 2-3 helpful hints that guide the candidate:
-- For BEHAVIORAL questions: suggest using STAR method, specific frameworks
-- For TECHNICAL questions: mention key concepts, common pitfalls, relevant technologies
-- Keep hints concise (1 sentence each)
+For EACH question, provide:
+1. 2-3 helpful hints that guide the candidate:
+   - For BEHAVIORAL questions: suggest using STAR method, specific frameworks
+   - For TECHNICAL questions: mention key concepts, common pitfalls, relevant technologies
+   - Keep hints concise (1 sentence each)
+2. 3-5 expected key points that a correct answer MUST cover (used for AI evaluation)
+3. A reference answer (ideal response in 3-5 sentences)
 
 Return ONLY a valid JSON array:
 [
@@ -57,7 +60,13 @@ Return ONLY a valid JSON array:
       "First helpful hint here",
       "Second helpful hint here",
       "Optional third hint"
-    ]
+    ],
+    "expectedKeyPoints": [
+      "First core concept the answer must cover",
+      "Second core concept",
+      "Third core concept"
+    ],
+    "referenceAnswer": "A complete ideal answer in 3-5 sentences covering all key points."
   }}
 ]
 """
@@ -88,7 +97,7 @@ Return ONLY a valid JSON array:
                         }
                     ],
                     temperature=0.3,
-                    max_tokens=1000,
+                    max_tokens=2000,
                 )
                 logger.info(f"Success with model: {model_name}")
                 break
@@ -119,6 +128,8 @@ Return ONLY a valid JSON array:
                 "difficulty": q.get("difficulty", "MEDIUM"),
                 "timeLimitSeconds": q.get("timeLimitSeconds", 120),
                 "hints": q.get("hints", []),
+                "expectedKeyPoints": q.get("expectedKeyPoints", []),
+                "referenceAnswer": q.get("referenceAnswer", ""),
                 "role": target_role,
             })
 

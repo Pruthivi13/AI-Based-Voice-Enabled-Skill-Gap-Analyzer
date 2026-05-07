@@ -16,3 +16,10 @@ python-multipart
 faster-whisper
 groq
 pdfminer.six
+google-generativeai
+google-genai
+httpx
+spacy
+nltk
+pydub
+imageio-ffmpeg

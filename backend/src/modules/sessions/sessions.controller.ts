@@ -162,8 +162,8 @@ export const createSessionWithResume = async (
           create: {
             id: q.id,
             content: q.content,
-            category: (q.category || interviewType) as any,
-            difficulty: (q.difficulty || difficulty) as any,
+            category: (['TECHNICAL', 'HR', 'COMMUNICATION', 'BEHAVIORAL'].includes(String(q.category).toUpperCase()) ? String(q.category).toUpperCase() : (['TECHNICAL', 'HR', 'COMMUNICATION', 'BEHAVIORAL'].includes(interviewType) ? interviewType : 'TECHNICAL')) as any,
+            difficulty: (['EASY', 'MEDIUM', 'HARD'].includes(String(q.difficulty).toUpperCase()) ? String(q.difficulty).toUpperCase() : (['EASY', 'MEDIUM', 'HARD'].includes(difficulty) ? difficulty : 'MEDIUM')) as any,
             timeLimitSeconds: q.timeLimitSeconds || 120,
             isActive: true,
           },
@@ -256,8 +256,8 @@ export const createTargetedSession = async (
           create: {
             id: q.id,
             content: q.content,
-            category: (q.category || interviewType) as any,
-            difficulty: (q.difficulty || difficulty) as any,
+            category: (['TECHNICAL', 'HR', 'COMMUNICATION', 'BEHAVIORAL'].includes(String(q.category).toUpperCase()) ? String(q.category).toUpperCase() : (['TECHNICAL', 'HR', 'COMMUNICATION', 'BEHAVIORAL'].includes(interviewType) ? interviewType : 'TECHNICAL')) as any,
+            difficulty: (['EASY', 'MEDIUM', 'HARD'].includes(String(q.difficulty).toUpperCase()) ? String(q.difficulty).toUpperCase() : (['EASY', 'MEDIUM', 'HARD'].includes(difficulty) ? difficulty : 'MEDIUM')) as any,
             timeLimitSeconds: q.timeLimitSeconds || 120,
             hints: q.hints ?? null,
             isActive: true,

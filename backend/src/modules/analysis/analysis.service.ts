@@ -1,6 +1,6 @@
 import prisma from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
-import { analyzeResponse } from '../../services/mlClient.service';
+import { analyzeResponse, fullAnalyzeResponse } from '../../services/mlClient.service';
 import { logger } from '../../utils/logger';
 import { updateStreak } from '../../services/streak.service';
 import { captureSkillSnapshot } from '../../services/skillSnapshot.service';
@@ -216,10 +216,43 @@ export const generateMockAnalysis = async (
       ],
     };
 
-    // Use real ML if transcript exists
+    // Use full AI pipeline if transcript exists
     if (response.transcript) {
-      logger.info(`Using ML analysis for response: ${response.id}`);
-      const mlResult = await analyzeResponse(response.id, response.transcript);
+      logger.info(`Running full AI analysis for response: ${response.id}`);
+
+      // Fetch question with expected key points
+      const question = await prisma.question.findUnique({
+        where: { id: response.questionId },
+        select: {
+          content: true,
+          expectedKeywords: true,
+          referenceAnswer: true,
+        },
+      });
+
+      const expectedKeyPoints = Array.isArray(question?.expectedKeywords)
+        ? (question.expectedKeywords as string[])
+        : [];
+
+      // Try full AI pipeline first (LLM + semantic + spectrogram)
+      let mlResult = null;
+      if (expectedKeyPoints.length > 0) {
+        mlResult = await fullAnalyzeResponse(
+          response.id,
+          response.transcript,
+          question?.content || '',
+          expectedKeyPoints,
+          question?.referenceAnswer || '',
+          response.durationSeconds || 60
+        );
+      }
+
+      // Fallback to basic analysis if full pipeline fails or no key points
+      if (!mlResult) {
+        logger.info(`Falling back to basic analysis for response: ${response.id}`);
+        mlResult = await analyzeResponse(response.id, response.transcript);
+      }
+
       if (mlResult) {
         analysisData = {
           clarityScore: mlResult.clarityScore,

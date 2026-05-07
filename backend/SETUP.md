@@ -252,8 +252,30 @@ The FastAPI service (`backend/main.py`) exposes these internal endpoints:
 | `POST` | `/internal/generate-roadmap` | Generate skill roadmap |
 | `POST` | `/internal/generate-node-info` | Get info for a roadmap node |
 | `WS`   | `/ws/transcribe/:response_id` | Real-time audio transcription |
+| `GET`  | `/api/questions` | Standalone MVP question bank |
+| `POST` | `/api/analyze-answer` | Standalone MVP audio/transcript analysis pipeline |
 
 These endpoints are called by the Express API (via `backend/src/services/mlClient.service.ts`), not directly by the frontend.
+
+### Standalone MVP Analysis Endpoint
+
+`POST /api/analyze-answer` accepts multipart form data:
+
+```text
+audio=<audio file>                 optional when transcript is provided
+question_id=1
+user_id=demo-user
+question=Explain REST API and its principles.
+expected_keywords=["HTTP methods","stateless","JSON"]
+expected_key_points=["uses HTTP methods","stateless requests","JSON responses"]
+reference_answer=...
+duration_seconds=60
+transcript=...                     optional text-only test mode
+```
+
+The response includes transcript, keyword matches, content scores, delivery
+metrics, final `overallScore`, `label`, and the scoring weights
+`{ "content": 0.7, "delivery": 0.3 }`.
 
 ---
 

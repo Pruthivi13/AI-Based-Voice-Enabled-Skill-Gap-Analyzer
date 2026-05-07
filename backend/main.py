@@ -7,6 +7,8 @@ import tempfile
 import os
 import subprocess
 import json
+import uuid
+from pathlib import Path
 from utils.logger import setup_logger
 
 app = FastAPI(title="AI Voice Skill Gap Analyzer - ML Service")
@@ -77,6 +79,89 @@ def read_root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+def _parse_form_list(value: Optional[str]) -> list:
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+        if isinstance(parsed, list):
+            return [str(item) for item in parsed]
+        if isinstance(parsed, str):
+            return [parsed]
+    except Exception:
+        pass
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+@app.get("/api/questions")
+def api_questions():
+    from backend.services.question_bank import load_questions
+
+    return {"success": True, "questions": load_questions()}
+
+
+@app.post("/api/analyze-answer")
+async def analyze_answer_api(
+    audio: Optional[UploadFile] = File(None),
+    question_id: Optional[str] = Form(None),
+    user_id: Optional[str] = Form(None),
+    question: Optional[str] = Form(None),
+    expected_keywords: Optional[str] = Form(None),
+    expected_key_points: Optional[str] = Form(None),
+    reference_answer: Optional[str] = Form(None),
+    duration_seconds: Optional[float] = Form(None),
+    transcript: Optional[str] = Form(None),
+):
+    """
+    Public MVP endpoint:
+    audio -> STT -> keywords -> LLM content evaluation -> audio metrics -> score.
+    """
+    from backend.services.pipeline import analyze_answer_pipeline
+
+    audio_path = None
+    try:
+        if audio is not None:
+            upload_root = Path(__file__).resolve().parent / "uploads" / "analyze_answers"
+            safe_user = "".join(
+                ch for ch in (user_id or "anonymous") if ch.isalnum() or ch in ("-", "_")
+            ) or "anonymous"
+            target_dir = upload_root / safe_user
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            suffix = Path(audio.filename or "answer.webm").suffix or ".webm"
+            audio_path = target_dir / f"{uuid.uuid4().hex}{suffix}"
+            content = await audio.read()
+            if len(content) < 100:
+                raise HTTPException(status_code=400, detail="Audio file is empty or too small")
+            audio_path.write_bytes(content)
+
+        if audio_path is None and not transcript:
+            raise HTTPException(
+                status_code=400,
+                detail="Provide an audio file or a transcript for analysis",
+            )
+
+        result = await analyze_answer_pipeline(
+            audio_path=audio_path,
+            transcript=transcript,
+            question_id=question_id,
+            user_id=user_id,
+            question_text=question,
+            expected_keywords=_parse_form_list(expected_keywords),
+            expected_key_points=_parse_form_list(expected_key_points),
+            reference_answer=reference_answer,
+            duration_seconds=duration_seconds,
+        )
+        if audio_path:
+            result["audioPath"] = str(audio_path)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Analyze answer API failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── Internal Endpoints ──
@@ -247,6 +332,145 @@ async def fetch_courses_endpoint(request: FetchCoursesRequest):
     except Exception as e:
         logger.error(f"Fetch courses error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+class FullAnalysisRequest(BaseModel):
+    responseId: str
+    transcript: str
+    question: str
+    expectedKeyPoints: list = []
+    referenceAnswer: str = ""
+    durationSeconds: float = 60.0
+    wavPath: Optional[str] = None
+
+
+@app.post("/internal/full-analyze")
+async def full_analyze_endpoint(request: FullAnalysisRequest):
+    """
+    Complete pipeline using all external packages:
+    1. sentence-transformers  → semantic coverage of key points
+    2. librosa spectrogram    → audio delivery features
+    3. Gemini/Groq LLM        → holistic content evaluation
+    """
+    from backend.services.semantic_scorer import (
+        compute_semantic_similarity,
+        compute_keypoint_coverage
+    )
+    from backend.services.spectrogram_analyzer import extract_audio_features
+    from backend.services.gemini_evaluator import evaluate_with_gemini
+    from backend.services.analyzer import count_filler_words, calculate_speech_rate
+
+    loop = asyncio.get_event_loop()
+
+    # Step 1 — Semantic similarity (sentence-transformers)
+    semantic_coverage = await loop.run_in_executor(
+        None,
+        lambda: compute_keypoint_coverage(
+            request.transcript,
+            request.expectedKeyPoints
+        )
+    )
+
+    # Step 2 — Audio delivery (librosa spectrogram)
+    delivery_metrics = {}
+    if request.wavPath and os.path.exists(request.wavPath):
+        delivery_metrics = await loop.run_in_executor(
+            None,
+            lambda: extract_audio_features(request.wavPath)
+        )
+
+    # Add transcript-derived delivery metrics
+    delivery_metrics["fillerWordCount"] = count_filler_words(request.transcript)
+    delivery_metrics["speechRateWpm"] = calculate_speech_rate(
+        request.transcript, int(request.durationSeconds)
+    )
+
+    # Step 3 — Gemini/Groq LLM evaluation (with full context)
+    llm_result = await loop.run_in_executor(
+        None,
+        lambda: evaluate_with_gemini(
+            question=request.question,
+            transcript=request.transcript,
+            expected_key_points=request.expectedKeyPoints,
+            reference_answer=request.referenceAnswer,
+            semantic_coverage=semantic_coverage,
+            delivery_metrics=delivery_metrics,
+        )
+    )
+
+    # Step 4 — Combine into final score
+    content_score = llm_result.get("overallContentScore", 6.0)
+    delivery_score = delivery_metrics.get("confidenceScore", 6.0)
+    pause_score = delivery_metrics.get("pauseScore", 6.0)
+    coverage_score = semantic_coverage.get("coveragePercent", 50) / 10  # normalize 0-100 → 0-10
+
+    overall = round(
+        content_score * 0.55 +      # LLM content (primary)
+        coverage_score * 0.15 +     # semantic coverage
+        delivery_score * 0.15 +     # voice confidence
+        pause_score * 0.15,         # pause quality
+        1
+    )
+
+    # Enforce final MVP score contract: content 70%, delivery 30%.
+    coverage_score = semantic_coverage.get("coveragePercent", 50) / 10
+    content_score = round(float(content_score) * 0.85 + coverage_score * 0.15, 1)
+    delivery_score = round((float(delivery_score) + float(pause_score)) / 2, 1)
+    overall = round(content_score * 0.7 + delivery_score * 0.3, 1)
+
+    # Build feedback list
+    feedback_parts = [llm_result.get("feedback", "")]
+    if semantic_coverage.get("missedPoints"):
+        missed = ", ".join(semantic_coverage["missedPoints"][:3])
+        feedback_parts.append(f"Key points not addressed: {missed}.")
+    if delivery_metrics.get("deliveryNote"):
+        feedback_parts.append(delivery_metrics["deliveryNote"])
+
+    # Compute semantic similarity for reference answer
+    ref_similarity = 0.0
+    if request.referenceAnswer:
+        ref_similarity = await loop.run_in_executor(
+            None,
+            lambda: compute_semantic_similarity(
+                request.transcript, request.referenceAnswer
+            )
+        )
+
+    return {
+        "responseId": request.responseId,
+        # Content (LLM)
+        "clarityScore": llm_result.get("clarity", 6.0),
+        "relevanceScore": llm_result.get("relevance", 6.0),
+        "technicalScore": llm_result.get("correctness", 6.0),
+        # Semantic
+        "completenessScore": round(coverage_score, 1),
+        "coveredPoints": semantic_coverage.get("coveredPoints", []),
+        "missedPoints": semantic_coverage.get("missedPoints", []),
+        "semanticSimilarity": ref_similarity,
+        # Delivery (spectrogram)
+        "fluencyScore": delivery_metrics.get("confidenceScore", 6.0),
+        "confidenceScore": delivery_metrics.get("confidenceScore", 6.0),
+        "pronunciationScore": delivery_metrics.get("pitchExpressiveness", 6.0),
+        "pauseScore": delivery_metrics.get("pauseScore", 6.0),
+        "pauseCount": delivery_metrics.get("pauseCount", 0),
+        "longPauses": delivery_metrics.get("longPauses", 0),
+        "expressiveness": delivery_metrics.get("expressiveness", 5.0),
+        "stammerIndicator": delivery_metrics.get("stammerIndicator", 0.0),
+        # Transcript metrics
+        "fillerWordCount": delivery_metrics.get("fillerWordCount", 0),
+        "speechRateWpm": delivery_metrics.get("speechRateWpm", 0),
+        # Combined
+        "contentScore": content_score,
+        "deliveryScore": delivery_score,
+        "overallScore": overall,
+        "grammarScore": round((llm_result.get("clarity", 6.0) + delivery_metrics.get("confidenceScore", 6.0)) / 2, 1),
+        "sentiment": "positive" if overall >= 7 else "neutral",
+        "feedbackJson": feedback_parts,
+        "keywordsFound": llm_result.get("keywordsFound", []),
+        "strengths": llm_result.get("strengths", []),
+        "improvements": llm_result.get("improvements", []),
+        "success": True,
+    }
+
 
 @app.post("/internal/evaluate-answer")
 async def evaluate_answer_endpoint(request: EvaluateAnswerRequest):
