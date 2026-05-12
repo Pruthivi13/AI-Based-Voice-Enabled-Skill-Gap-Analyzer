@@ -13,7 +13,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from utils.logger import setup_logger
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../backend/.env"))
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../.env"))
 
 logger = setup_logger(__name__)
 
@@ -92,18 +92,17 @@ def _fetch_thumbnail(title: str, platform: str) -> str:
         return ""
     
     query = f"{title} {platform} course"
-    payload = json.dumps({
+    body = {
         "q": query,
         "num": 5
-    })
+    }
     headers = {
-        "X-API-KEY": SERPER_API_KEY,
-        "Content-Type": "application/json",
+        "X-API-KEY": SERPER_API_KEY or "",
     }
     
     try:
-        with httpx.Client(timeout=10) as client:
-            resp = client.post(SERPER_IMAGES_URL, data=payload, headers=headers)
+        with httpx.Client(timeout=10) as http_client:
+            resp = http_client.post(SERPER_IMAGES_URL, json=body, headers=headers)
             resp.raise_for_status()
             data = resp.json()
             
@@ -130,20 +129,19 @@ def _fetch_thumbnail(title: str, platform: str) -> str:
 def _search_platform(role: str, platform_name: str, site_filter: str) -> list[dict]:
     """Run a single Serper search for one platform."""
     query = f"{role} course {site_filter}"
-    payload = json.dumps({
+    body = {
         "q": query,
         "num": 4,
         "gl": "us",
         "hl": "en",
-    })
+    }
     headers = {
-        "X-API-KEY": SERPER_API_KEY,
-        "Content-Type": "application/json",
+        "X-API-KEY": SERPER_API_KEY or "",
     }
 
     try:
-        with httpx.Client(timeout=10) as client:
-            resp = client.post(SERPER_URL, data=payload, headers=headers)
+        with httpx.Client(timeout=10) as http_client:
+            resp = http_client.post(SERPER_URL, json=body, headers=headers)
             resp.raise_for_status()
             data = resp.json()
     except Exception as e:

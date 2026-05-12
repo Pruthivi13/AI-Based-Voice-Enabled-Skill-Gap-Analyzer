@@ -1,6 +1,9 @@
 import prisma from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
-import { analyzeResponse } from '../../services/mlClient.service';
+import {
+  analyzeAnswerPipeline,
+  analyzeResponse,
+} from '../../services/mlClient.service';
 import { logger } from '../../utils/logger';
 import { updateStreak } from '../../services/streak.service';
 import { captureSkillSnapshot } from '../../services/skillSnapshot.service';
@@ -17,6 +20,87 @@ const avg = (arr: (number | null)[]): number => {
   return valid.length
     ? parseFloat((valid.reduce((a, b) => a + b, 0) / valid.length).toFixed(1))
     : 0;
+};
+
+const toStringArray = (value: any): string[] => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item)).filter(Boolean);
+  }
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => String(item)).filter(Boolean);
+      }
+    } catch {
+      return value
+        .split(/[,;\n|]/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+  }
+  return [];
+};
+
+const mapPipelineResultToAnalysis = (mlResult: any) => {
+  const content = mlResult?.content_scores ?? {};
+  const delivery = mlResult?.delivery_scores ?? {};
+  const audio = mlResult?.audio_metrics ?? {};
+  const wordsPerMinute = Number(audio.words_per_minute);
+  const hasUsablePace =
+    Boolean(audio.audio_available) &&
+    Number.isFinite(wordsPerMinute) &&
+    wordsPerMinute > 0;
+  const improvements = Array.isArray(mlResult?.improvements)
+    ? mlResult.improvements
+    : [];
+  const metricFeedback = [];
+
+  if (audio.audio_available) {
+    if (hasUsablePace) {
+      metricFeedback.push(`Speaking speed: ${Math.round(wordsPerMinute)} WPM`);
+    }
+    if (audio.pause_count != null) {
+      metricFeedback.push(
+        `Pause analysis: ${audio.pause_count} pause(s), ${audio.long_pause_count ?? 0} long pause(s)`
+      );
+    }
+    if (audio.filler_count != null) {
+      metricFeedback.push(`Filler analysis: ${audio.filler_count} filler word(s) detected`);
+    }
+    if (delivery.hesitation_control != null) {
+      metricFeedback.push(`Hesitation control: ${Number(delivery.hesitation_control).toFixed(1)}/10`);
+    }
+    if (delivery.voice_quality != null) {
+      metricFeedback.push(`Voice quality/confidence cues: ${Number(delivery.voice_quality).toFixed(1)}/10`);
+    }
+  } else {
+    metricFeedback.push(
+      'Delivery timing needs recorded audio; transcript-only analysis cannot measure real pauses or voice quality.'
+    );
+  }
+
+  return {
+    clarityScore: content.clarity ?? null,
+    fluencyScore: delivery.fluency ?? null,
+    confidenceScore: delivery.confidence_cues ?? null,
+    relevanceScore: content.relevance ?? null,
+    grammarScore: content.clarity ?? null,
+    pronunciationScore: delivery.voice_quality ?? delivery.delivery ?? null,
+    technicalScore:
+      content.correctness != null && content.completeness != null
+        ? parseFloat(((content.correctness + content.completeness) / 2).toFixed(1))
+        : content.correctness ?? null,
+    fillerWordCount: audio.filler_count ?? null,
+    speechRateWpm: hasUsablePace ? Math.round(wordsPerMinute) : null,
+    sentiment: mlResult?.label === 'STRONG' ? 'positive' : 'neutral',
+    overallScore: mlResult?.overall_score ?? null,
+    feedbackJson: [
+      mlResult?.feedback,
+      ...improvements,
+      ...metricFeedback,
+    ].filter(Boolean),
+  };
 };
 
 export const getProcessingStatus = async (
@@ -192,7 +276,18 @@ export const generateMockAnalysis = async (
 ) => {
   const session = await prisma.interviewSession.findFirst({
     where: { id: sessionId, userId },
-    include: { responses: true },
+    include: {
+      responses: {
+        include: {
+          question: true,
+          uploads: {
+            where: { type: 'AUDIO' },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+        },
+      },
+    },
   });
   if (!session) throw new ApiError('NOT_FOUND', 'Session not found.', 404);
 
@@ -216,25 +311,54 @@ export const generateMockAnalysis = async (
       ],
     };
 
-    // Use real ML if transcript exists
-    if (response.transcript) {
-      logger.info(`Using ML analysis for response: ${response.id}`);
-      const mlResult = await analyzeResponse(response.id, response.transcript);
-      if (mlResult) {
-        analysisData = {
-          clarityScore: mlResult.clarityScore,
-          fluencyScore: mlResult.fluencyScore,
-          confidenceScore: mlResult.confidenceScore,
-          relevanceScore: mlResult.relevanceScore,
-          grammarScore: mlResult.grammarScore,
-          pronunciationScore: mlResult.pronunciationScore,
-          technicalScore: mlResult.technicalScore,
-          fillerWordCount: mlResult.fillerWordCount,
-          speechRateWpm: mlResult.speechRateWpm,
-          sentiment: mlResult.sentiment,
-          overallScore: mlResult.overallScore,
-          feedbackJson: mlResult.feedbackJson,
-        };
+    const audioUrl = response.uploads?.[0]?.fileUrl ?? null;
+
+    // Use real ML when either a transcript or the original audio is available.
+    if (response.transcript || audioUrl) {
+      logger.info(`Using new evaluator pipeline for response: ${response.id}`);
+      const expectedKeywords = toStringArray(response.question.expectedKeywords);
+      const referenceAnswer = response.question.referenceAnswer || '';
+      const expectedKeyPoints = referenceAnswer ? [referenceAnswer] : [];
+
+      const pipelineResult = await analyzeAnswerPipeline({
+        responseId: response.id,
+        userId,
+        questionId: response.questionId,
+        questionText: response.question.content,
+        transcript: response.transcript || '',
+        audioUrl,
+        expectedKeywords,
+        expectedKeyPoints,
+        idealAnswer: referenceAnswer,
+      });
+
+      if (pipelineResult) {
+        analysisData = mapPipelineResultToAnalysis(pipelineResult);
+      } else {
+        logger.warn(`New evaluator failed, falling back to transcript analyzer for response: ${response.id}`);
+        const mlResult = await analyzeResponse(response.id, response.transcript || '', {
+          questionText: response.question.content,
+          audioUrl,
+          expectedKeywords,
+          expectedKeyPoints,
+          idealAnswer: referenceAnswer,
+        });
+        if (mlResult) {
+          analysisData = {
+            clarityScore: mlResult.clarityScore,
+            fluencyScore: mlResult.fluencyScore,
+            confidenceScore: mlResult.confidenceScore,
+            relevanceScore: mlResult.relevanceScore,
+            grammarScore: mlResult.grammarScore,
+            pronunciationScore: mlResult.pronunciationScore,
+            technicalScore: mlResult.technicalScore,
+            fillerWordCount: mlResult.fillerWordCount,
+            speechRateWpm: mlResult.speechRateWpm,
+            sentiment: mlResult.sentiment,
+            overallScore: mlResult.overallScore,
+            feedbackJson: mlResult.feedbackJson,
+          };
+        }
       }
     }
 

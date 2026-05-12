@@ -1,7 +1,12 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
-import { finishSession, saveTranscript, pauseSession } from '../services/api';
+import {
+  finishSession,
+  pauseSession,
+  saveTranscript,
+  uploadAudioPlaceholder,
+} from '../services/api';
 import { generateFollowupQuestions } from '../services/api';
 import QuestionCard from '../components/QuestionCard';
 import TranscriptPanel from '../components/TranscriptPanel';
@@ -117,6 +122,9 @@ export default function LiveInterviewPage() {
 
   const timerRef         = useRef(null);
   const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+  const recordingStartedAtRef = useRef(null);
+  const pendingAudioUploadRef = useRef(Promise.resolve());
   const wsRef            = useRef(null);
   const streamRef        = useRef(null);
   const currentIndexRef  = useRef(initialIndex);
@@ -251,6 +259,9 @@ export default function LiveInterviewPage() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     streamRef.current = stream;
     setLiveStream(stream);
+    recordedChunksRef.current = [];
+    recordingStartedAtRef.current = Date.now();
+    pendingAudioUploadRef.current = Promise.resolve();
 
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
     const wsUrl   = API_URL.replace('http', 'ws');
@@ -274,6 +285,7 @@ export default function LiveInterviewPage() {
 
         const idx = currentIndexRef.current;
         const qId = questions[idx]?.id;
+        await pendingAudioUploadRef.current;
         try { await saveTranscript(sessionId, qId, msg.text, idx + 1); } catch {}
 
         setShowRating(true);
@@ -295,7 +307,10 @@ export default function LiveInterviewPage() {
     const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
     mediaRecorderRef.current = mediaRecorder;
     mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) ws.send(e.data);
+      if (e.data.size > 0) {
+        recordedChunksRef.current.push(e.data);
+        if (ws.readyState === WebSocket.OPEN) ws.send(e.data);
+      }
     };
     return mediaRecorder;
   }, [sessionId, questions, isFollowupActive, advanceOrFinish, fetchFollowups, stopTimer]);
@@ -337,12 +352,34 @@ export default function LiveInterviewPage() {
     setStatus('Transcribing');
     setTranscript('Transcribing your answer...');
     mediaRecorderRef.current.onstop = () => {
+      const idx = currentIndexRef.current;
+      const questionId = isFollowupActive
+        ? questions[pendingIndexRef.current]?.id
+        : questions[idx]?.id;
+      const durationSeconds = recordingStartedAtRef.current
+        ? Math.max(1, Math.round((Date.now() - recordingStartedAtRef.current) / 1000))
+        : undefined;
+      const chunks = recordedChunksRef.current;
+
+      if (questionId && chunks.length > 0) {
+        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+        pendingAudioUploadRef.current = uploadAudioPlaceholder(
+          sessionId,
+          questionId,
+          audioBlob,
+          idx + 1,
+          durationSeconds
+        ).catch((error) => {
+          console.error('Audio upload failed:', error);
+        });
+      }
+
       streamRef.current?.getTracks().forEach((t) => t.stop());
       setLiveStream(null);
       if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send('END');
     };
     mediaRecorderRef.current.stop();
-  }, [stopTimer]);
+  }, [isFollowupActive, questions, sessionId, stopTimer]);
 
   // ── Follow-up panel handlers ──────────────────────────────────────────────
   const handleAnswerFollowup = useCallback(() => {

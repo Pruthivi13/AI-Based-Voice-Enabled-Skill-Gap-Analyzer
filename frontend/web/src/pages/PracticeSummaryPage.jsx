@@ -156,6 +156,30 @@ export default function PracticeSummaryPage() {
                   </span>
                 </p>
               )}
+              {summary.analysis.pronunciationScore != null && (
+                <p>
+                  Voice Quality:{' '}
+                  <span className="text-primary-400 font-bold">
+                    {summary.analysis.pronunciationScore}/10
+                  </span>
+                </p>
+              )}
+              {summary.analysis.speechRateWpm != null && (
+                <p>
+                  Pace:{' '}
+                  <span className="text-primary-400 font-bold">
+                    {summary.analysis.speechRateWpm} WPM
+                  </span>
+                </p>
+              )}
+              {summary.analysis.fillerWordCount != null && (
+                <p>
+                  Fillers:{' '}
+                  <span className="text-primary-400 font-bold">
+                    {summary.analysis.fillerWordCount}
+                  </span>
+                </p>
+              )}
             </div>
           </GlassPanel>
         </div>

@@ -47,27 +47,16 @@ export const uploadAudio = async (
   const fileUrl = signedData.signedUrl;
   const storagePath = fileName;
 
-  // Create or update Response
-  const existing = await prisma.response.findUnique({
+  const response = await prisma.response.upsert({
     where: { sessionId_questionId: { sessionId, questionId } },
+    update: { durationSeconds, answerOrder },
+    create: {
+      sessionId,
+      questionId,
+      answerOrder,
+      durationSeconds,
+    },
   });
-
-  let response;
-  if (existing) {
-    response = await prisma.response.update({
-      where: { id: existing.id },
-      data: { durationSeconds, answerOrder },
-    });
-  } else {
-    response = await prisma.response.create({
-      data: {
-        sessionId,
-        questionId,
-        answerOrder,
-        durationSeconds,
-      },
-    });
-  }
 
   // Create Upload record
   const upload = await prisma.upload.create({

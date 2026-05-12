@@ -19,28 +19,17 @@ export const saveTranscript = async (
   });
   if (!question) throw new ApiError('NOT_FOUND', 'Question not found.', 404);
 
-  // Create or update Response with transcript
-  const existing = await prisma.response.findUnique({
+  const response = await prisma.response.upsert({
     where: { sessionId_questionId: { sessionId, questionId } },
+    update: { transcript, durationSeconds, answerOrder },
+    create: {
+      sessionId,
+      questionId,
+      transcript,
+      answerOrder,
+      durationSeconds,
+    },
   });
-
-  let response;
-  if (existing) {
-    response = await prisma.response.update({
-      where: { id: existing.id },
-      data: { transcript, durationSeconds, answerOrder },
-    });
-  } else {
-    response = await prisma.response.create({
-      data: {
-        sessionId,
-        questionId,
-        transcript,
-        answerOrder,
-        durationSeconds,
-      },
-    });
-  }
 
   return { success: true, responseId: response.id };
 };

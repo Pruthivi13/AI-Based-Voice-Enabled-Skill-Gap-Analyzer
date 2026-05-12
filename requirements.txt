@@ -4,7 +4,7 @@ sentence-transformers
 openai-whisper
 scikit-learn
 librosa
-numpy
+numpy<2.0
 pandas
 streamlit
 sounddevice
@@ -16,3 +16,9 @@ python-multipart
 faster-whisper
 groq
 pdfminer.six
+pydub
+spacy>=3.7,<3.8
+nltk
+google-generativeai
+rapidfuzz
+praat-parselmouth
