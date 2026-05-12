@@ -37,10 +37,10 @@ export const uploadAudio = async (
 
   if (error) throw new ApiError('UPLOAD_FAILED', error.message, 500);
 
-  // Get signed URL (valid for 1 hour) instead of public URL
+  // Get signed URL (valid for 24 hours) instead of public URL.
   const { data: signedData, error: signedError } = await supabase.storage
     .from('audio-uploads')
-    .createSignedUrl(fileName, 3600);
+    .createSignedUrl(fileName, 86400);
 
   if (signedError) throw new ApiError('URL_FAILED', signedError.message, 500);
 

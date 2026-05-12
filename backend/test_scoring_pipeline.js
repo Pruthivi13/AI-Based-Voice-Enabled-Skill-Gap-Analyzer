@@ -44,6 +44,11 @@ function mapPipelineResultToAnalysis(mlResult) {
     speechRateWpm: hasUsablePace ? Math.round(wordsPerMinute) : null,
     sentiment: mlResult?.label === 'STRONG' ? 'positive' : 'neutral',
     overallScore: mlResult?.overall_score ?? null,
+    llmProvider: mlResult?.llm_provider ?? null,
+    scorerBackend:
+      mlResult?.scorer_backend ??
+      mlResult?.content_model_evaluation?.scorer_backend ??
+      null,
     feedbackJson: [
       mlResult?.feedback,
       ...(Array.isArray(mlResult?.improvements) ? mlResult.improvements : []),
@@ -54,19 +59,22 @@ function mapPipelineResultToAnalysis(mlResult) {
 }
 
 async function callAnalyzer({ response, question, userId }) {
-  const form = new URLSearchParams();
+  const form = new FormData();
   form.append('response_id', response.id);
   form.append('user_id', userId);
   form.append('question_id', question.id);
   form.append('question_text', question.content);
   form.append('transcript', response.transcript);
-  form.append('expected_keywords', JSON.stringify(question.expectedKeywords || []));
-  form.append('expected_key_points', JSON.stringify([question.referenceAnswer]));
-  form.append('ideal_answer', question.referenceAnswer);
+  (question.expectedKeywords || []).forEach((keyword) => {
+    form.append('expected_keywords', String(keyword));
+  });
+  if (question.referenceAnswer) {
+    form.append('expected_key_points', question.referenceAnswer);
+    form.append('ideal_answer', question.referenceAnswer);
+  }
 
   const mlResponse = await fetch(`${ML_URL}/api/analyze-answer`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: form,
   });
 

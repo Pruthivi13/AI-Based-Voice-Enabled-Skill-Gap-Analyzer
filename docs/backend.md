@@ -162,8 +162,7 @@ backend/
 │   │       └── settings.schema.ts
 │   ├── services/
 │   │   ├── mlClient.service.ts
-│   │   ├── reportGenerator.service.ts
-│   │   └── userSync.service.ts
+│   │   └── reportGenerator.service.ts
 │   ├── utils/
 │   │   ├── apiResponse.ts
 │   │   ├── apiError.ts
@@ -232,7 +231,6 @@ Expected env values:
 - `FIREBASE_PROJECT_ID`
 - `FIREBASE_CLIENT_EMAIL`
 - `FIREBASE_PRIVATE_KEY`
-- `FIREBASE_STORAGE_BUCKET`
 
 Remember: replace literal `\\n` in private key with actual newlines.
 
@@ -1298,7 +1296,6 @@ DATABASE_URL=postgresql://user:password@localhost:5432/interview_ai
 FIREBASE_PROJECT_ID=your_project_id
 FIREBASE_CLIENT_EMAIL=your_client_email
 FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"
-FIREBASE_STORAGE_BUCKET=your_bucket.appspot.com
 
 FRONTEND_ORIGIN=http://localhost:3000
 ML_SERVICE_URL=http://localhost:8000
@@ -1353,4 +1350,3 @@ The backend MVP is complete when all items below are true:
 - final report can be generated and fetched
 - dashboard/history/settings endpoints work
 - ownership and validation checks are enforced
-

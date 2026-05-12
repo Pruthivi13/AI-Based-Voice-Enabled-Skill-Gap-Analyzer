@@ -85,7 +85,8 @@ Return ONLY a valid JSON array:
                             "content": prompt
                         }
                     ],
-                    temperature=0.3,
+                    temperature=0,
+                    seed=42,
                     max_tokens=1000,
                 )
                 logger.info(f"Success with model: {model_name}")

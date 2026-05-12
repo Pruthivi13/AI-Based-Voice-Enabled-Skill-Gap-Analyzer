@@ -1,4 +1,5 @@
 import prisma from '../../config/prisma';
+import supabase from '../../config/supabase';
 import { ApiError } from '../../utils/apiError';
 import {
   analyzeAnswerPipeline,
@@ -7,6 +8,8 @@ import {
 import { logger } from '../../utils/logger';
 import { updateStreak } from '../../services/streak.service';
 import { captureSkillSnapshot } from '../../services/skillSnapshot.service';
+
+const SIGNED_AUDIO_URL_TTL_SECONDS = 86400;
 
 const getRatingLabel = (score: number): string => {
   if (score >= 9) return 'Excellent';
@@ -42,10 +45,47 @@ const toStringArray = (value: any): string[] => {
   return [];
 };
 
+const getFreshAudioUrl = async (upload: any): Promise<string | null> => {
+  if (!upload) return null;
+  if (!upload.storagePath) return upload.fileUrl ?? null;
+
+  const { data, error } = await supabase.storage
+    .from('audio-uploads')
+    .createSignedUrl(upload.storagePath, SIGNED_AUDIO_URL_TTL_SECONDS);
+
+  if (error) {
+    logger.warn(
+      `Could not refresh signed audio URL for upload ${upload.id}: ${error.message}`
+    );
+    return upload.fileUrl ?? null;
+  }
+
+  return data.signedUrl;
+};
+
+const scoringModeLabel = (llmProvider?: string | null, scorerBackend?: string | null) => {
+  if (llmProvider === 'heuristic_fallback' || scorerBackend === 'local_semantic') {
+    return 'heuristic mode';
+  }
+  if (scorerBackend === 'transformer') {
+    return 'AI model';
+  }
+  if (scorerBackend === 'skipped') {
+    return 'rubric only';
+  }
+  return llmProvider ? 'AI model' : null;
+};
+
 const mapPipelineResultToAnalysis = (mlResult: any) => {
   const content = mlResult?.content_scores ?? {};
   const delivery = mlResult?.delivery_scores ?? {};
   const audio = mlResult?.audio_metrics ?? {};
+  const llmProvider = mlResult?.llm_provider ?? mlResult?.llm_evaluation?.provider ?? null;
+  const scorerBackend =
+    mlResult?.scorer_backend ??
+    mlResult?.content_model_evaluation?.scorer_backend ??
+    null;
+  const scoringMode = scoringModeLabel(llmProvider, scorerBackend);
   const wordsPerMinute = Number(audio.words_per_minute);
   const hasUsablePace =
     Boolean(audio.audio_available) &&
@@ -95,7 +135,10 @@ const mapPipelineResultToAnalysis = (mlResult: any) => {
     speechRateWpm: hasUsablePace ? Math.round(wordsPerMinute) : null,
     sentiment: mlResult?.label === 'STRONG' ? 'positive' : 'neutral',
     overallScore: mlResult?.overall_score ?? null,
+    llmProvider,
+    scorerBackend,
     feedbackJson: [
+      scoringMode ? `Scoring mode: ${scoringMode}` : null,
       mlResult?.feedback,
       ...improvements,
       ...metricFeedback,
@@ -204,6 +247,8 @@ export const getQuestionSummary = async (
           fillerWordCount: response.analysis.fillerWordCount,
           speechRateWpm: response.analysis.speechRateWpm,
           overallScore: response.analysis.overallScore,
+          llmProvider: response.analysis.llmProvider,
+          scorerBackend: response.analysis.scorerBackend,
           feedback: response.analysis.feedbackJson,
         }
       : null,
@@ -265,6 +310,12 @@ export const getSessionReview = async (userId: string, sessionId: string) => {
       transcript: r.transcript,
       notes: r.notes,
       score: r.analysis?.overallScore ?? null,
+      llmProvider: r.analysis?.llmProvider ?? null,
+      scorerBackend: r.analysis?.scorerBackend ?? null,
+      scoringMode: scoringModeLabel(
+        r.analysis?.llmProvider,
+        r.analysis?.scorerBackend
+      ),
       feedback: r.analysis?.feedbackJson ?? null,
     })),
   };
@@ -304,6 +355,8 @@ export const generateMockAnalysis = async (
       speechRateWpm: 130,
       sentiment: 'positive',
       overallScore: 7.4,
+      llmProvider: null,
+      scorerBackend: null,
       feedbackJson: [
         'Good structure',
         'Add more examples',
@@ -311,7 +364,7 @@ export const generateMockAnalysis = async (
       ],
     };
 
-    const audioUrl = response.uploads?.[0]?.fileUrl ?? null;
+    const audioUrl = await getFreshAudioUrl(response.uploads?.[0] ?? null);
 
     // Use real ML when either a transcript or the original audio is available.
     if (response.transcript || audioUrl) {
@@ -356,6 +409,8 @@ export const generateMockAnalysis = async (
             speechRateWpm: mlResult.speechRateWpm,
             sentiment: mlResult.sentiment,
             overallScore: mlResult.overallScore,
+            llmProvider: mlResult.llmProvider ?? null,
+            scorerBackend: mlResult.scorerBackend ?? null,
             feedbackJson: mlResult.feedbackJson,
           };
         }

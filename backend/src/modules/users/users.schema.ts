@@ -1,16 +1,5 @@
 import { z } from 'zod';
 
-export const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6),
-  fullName: z.string().min(1).max(120).optional(),
-});
-
-export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-});
-
 export const updateUserSchema = z.object({
   fullName: z.string().max(120).optional(),
   profile: z

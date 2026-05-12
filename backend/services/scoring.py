@@ -155,6 +155,11 @@ def build_final_result(
         "improvements": improvements[:6],
         "feedback": feedback,
         "llm_provider": llm_result.get("provider"),
+        "scorer_backend": (
+            content_model_result.get("scorer_backend")
+            if content_model_result
+            else None
+        ),
         "llm_evaluation": llm_result,
         "content_model_evaluation": content_model_result,
     }

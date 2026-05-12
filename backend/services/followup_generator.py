@@ -86,7 +86,8 @@ Return ONLY a valid JSON array, no markdown, no explanation:
                     },
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.4,
+                temperature=0,
+                seed=42,
                 max_tokens=600,
             )
             raw = (response.choices[0].message.content or "").strip()

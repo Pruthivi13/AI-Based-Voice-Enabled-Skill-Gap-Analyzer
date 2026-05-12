@@ -139,6 +139,12 @@ export default function PerformanceAnalysisPage() {
         : s >= 6
           ? 'borderline'
           : 'needs-improvement';
+  const scoringModeStyle = (mode) =>
+    mode === 'heuristic mode'
+      ? 'bg-amber-500/10 text-amber-600 border-amber-500/20'
+      : mode === 'AI model'
+        ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+        : 'bg-slate-500/10 text-slate-500 border-slate-500/20';
 
   // Stable roadmap ID for localStorage (role + session)
   const roadmapId = `${roadmapRole}-${sessionId}`
@@ -212,6 +218,14 @@ export default function PerformanceAnalysisPage() {
                       Q{idx + 1}
                     </span>
                     {q.score && <StatusChip status={getStatus(q.score)} />}
+                    {q.scoringMode && (
+                      <span
+                        title={[q.llmProvider, q.scorerBackend].filter(Boolean).join(' / ')}
+                        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${scoringModeStyle(q.scoringMode)}`}
+                      >
+                        {q.scoringMode}
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm text-ink-700 line-clamp-1">
                     {q.content}

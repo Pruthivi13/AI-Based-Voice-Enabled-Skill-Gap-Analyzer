@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import {
   finishSession,
+  getToken,
   pauseSession,
   saveTranscript,
   uploadAudioPlaceholder,
+  generateFollowupQuestions,
 } from '../services/api';
-import { generateFollowupQuestions } from '../services/api';
 import QuestionCard from '../components/QuestionCard';
 import TranscriptPanel from '../components/TranscriptPanel';
 import RecordingControls from '../components/RecordingControls';
@@ -243,7 +244,7 @@ export default function LiveInterviewPage() {
     pendingIndexRef.current = idx;
     try {
       const data = await generateFollowupQuestions(
-        sessionId, q.content, finalTranscript, q.role || 'Software Engineer', 2
+        sessionId, q.content, finalTranscript, q.role || 'Software Engineer', 2, q.id
       );
       const fqs = data?.followups ?? [];
       setFollowupQuestions(fqs);
@@ -265,7 +266,11 @@ export default function LiveInterviewPage() {
 
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
     const wsUrl   = API_URL.replace('http', 'ws');
-    const ws = new WebSocket(`${wsUrl}/ws/transcribe/${questionId}`);
+    const token = await getToken();
+    if (!token) throw new Error('Missing auth token');
+    const ws = new WebSocket(
+      `${wsUrl}/ws/transcribe/${encodeURIComponent(questionId)}?token=${encodeURIComponent(token)}`
+    );
     wsRef.current = ws;
 
     ws.onmessage = async (event) => {

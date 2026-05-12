@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Form, Query
 from pydantic import BaseModel
-from typing import Any, Optional, cast
+from typing import Any, Optional, Union, cast
 import uvicorn
 import asyncio
 import tempfile
@@ -9,6 +9,9 @@ import subprocess
 import json
 import re
 import uuid
+import random
+import numpy as np
+import torch
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -17,6 +20,12 @@ from utils.logger import setup_logger
 app = FastAPI(title="AI Voice Skill Gap Analyzer - ML Service")
 
 logger = setup_logger(__name__)
+
+torch.manual_seed(42)
+np.random.seed(42)
+random.seed(42)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(42)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 UPLOAD_DIR = PROJECT_ROOT / "backend" / "uploads" / "audio"
@@ -96,9 +105,14 @@ def health():
 
 # ── AI Interview Evaluator MVP Endpoints ──
 
-def _parse_form_list(value: Optional[str]) -> list[str]:
+def _parse_form_list(value: Optional[Union[str, list[str]]]) -> list[str]:
     if not value:
         return []
+    if isinstance(value, list):
+        items: list[str] = []
+        for item in value:
+            items.extend(_parse_form_list(item))
+        return items
     try:
         parsed = json.loads(value)
         if isinstance(parsed, list):
@@ -190,8 +204,8 @@ async def analyze_answer_pipeline(
     response_id: Optional[str] = Form(None),
     transcript: Optional[str] = Form(None),
     question_text: Optional[str] = Form(None),
-    expected_keywords: Optional[str] = Form(None),
-    expected_key_points: Optional[str] = Form(None),
+    expected_keywords: Optional[list[str]] = Form(None),
+    expected_key_points: Optional[list[str]] = Form(None),
     ideal_answer: Optional[str] = Form(None),
 ):
     from backend.services.audio_analysis import analyze_audio
@@ -200,7 +214,6 @@ async def analyze_answer_pipeline(
     from backend.services.llm_service import evaluate_content
     from backend.services.question_bank import get_question
     from backend.services.scoring import build_final_result
-    from backend.services.storage_service import save_evaluation
     from backend.services.stt_service import transcribe_file
 
     question = get_question(question_id)
@@ -331,6 +344,7 @@ async def analyze_answer_pipeline(
         logger.warning("Content scorer failed; continuing with LLM rubric only: %s", error)
         content_model_result = {
             "model_label": "ERROR",
+            "scorer_backend": "error",
             "keyword_overlap": 0.0,
             "answer_length": len(transcript_text.split()),
             "final_score": "WEAK",
@@ -346,20 +360,10 @@ async def analyze_answer_pipeline(
         audio_metrics=audio_metrics,
         content_model_result=content_model_result,
     )
-    saved_response_id = save_evaluation(
-        user_id=user_id,
-        question_id=question["id"],
-        audio_path=audio_path,
-        transcript=transcript_text,
-        audio_metrics=audio_metrics,
-        llm_result=llm_result,
-        final_result=final_result,
-        response_id=response_id,
-    )
 
     return {
         "success": True,
-        "response_id": saved_response_id,
+        "response_id": response_id or str(uuid.uuid4()),
         "user_id": user_id,
         "stt": stt_result,
         **final_result,
@@ -384,12 +388,26 @@ def get_evaluator_results(
 
 @app.post("/internal/transcribe")
 async def transcribe(request: TranscribeRequest):
-    from backend.services.transcription import transcribe_audio
+    from backend.services.stt_service import transcribe_file
     try:
-        transcript = await transcribe_audio(request.audioUrl)
+        loop = asyncio.get_event_loop()
+        audio_path = await loop.run_in_executor(
+            None,
+            lambda: _download_audio_url(request.audioUrl),
+        )
+        try:
+            result = await loop.run_in_executor(
+                None,
+                lambda: transcribe_file(audio_path),
+            )
+        finally:
+            if os.path.exists(audio_path):
+                os.unlink(audio_path)
+
         return {
             "responseId": request.responseId,
-            "transcript": transcript,
+            "transcript": result.get("transcript", ""),
+            "stt": result,
             "success": True
         }
     except Exception as e:
@@ -712,9 +730,9 @@ async def run_transcription(chunks: list, partial: bool = False) -> str:
 
 
 def _transcribe_sync(wav_path: str, partial: bool) -> str:
-    from backend.services.transcription import get_model
+    from backend.services.stt_service import _get_whisper_model
 
-    model = get_model()
+    model = _get_whisper_model()
     segments, _ = model.transcribe(
         wav_path,
         beam_size=1 if partial else 3,

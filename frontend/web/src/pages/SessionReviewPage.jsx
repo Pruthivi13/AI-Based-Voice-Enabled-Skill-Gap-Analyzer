@@ -55,6 +55,31 @@ function CommunityDifficultyBadge({ questionId }) {
   );
 }
 
+function ScoringModeBadge({ mode, llmProvider, scorerBackend }) {
+  if (!mode) return null;
+  const isHeuristic = mode === 'heuristic mode';
+  const color = isHeuristic ? '#d97706' : '#059669';
+
+  return (
+    <span
+      title={[llmProvider, scorerBackend].filter(Boolean).join(' / ')}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        fontSize: 10,
+        fontWeight: 700,
+        color,
+        background: `${color}12`,
+        border: `1px solid ${color}25`,
+        padding: '3px 9px',
+        borderRadius: 99,
+      }}
+    >
+      {mode}
+    </span>
+  );
+}
+
 export default function SessionReviewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -154,6 +179,11 @@ export default function SessionReviewPage() {
                   </span>
                   <StatusChip status={getStatus(q.score)} />
                   <CommunityDifficultyBadge questionId={q.id} />
+                  <ScoringModeBadge
+                    mode={q.scoringMode}
+                    llmProvider={q.llmProvider}
+                    scorerBackend={q.scorerBackend}
+                  />
                 </div>
                 <p
                   className={`font-semibold ${isDark ? 'text-white' : 'text-ink-900'}`}

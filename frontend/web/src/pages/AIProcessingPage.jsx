@@ -24,8 +24,19 @@ export default function AIProcessingPage() {
       return;
     }
 
-    // Trigger analysis generation first
-    generateAnalysis(sessionId).catch(console.error);
+    // Trigger analysis generation with retry on failure
+    const runAnalysis = async (retries = 3) => {
+      for (let i = 0; i < retries; i++) {
+        try {
+          await generateAnalysis(sessionId);
+          return;
+        } catch (err) {
+          console.warn(`generateAnalysis attempt ${i + 1} failed:`, err);
+          if (i < retries - 1) await new Promise((r) => setTimeout(r, 3000));
+        }
+      }
+    };
+    runAnalysis();
 
     // Poll real processing status from backend
     const pollStatus = async () => {

@@ -9,7 +9,7 @@ import { auth } from '../config/firebase';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 /** Retrieves the current Firebase ID token, or null if not signed in */
-const getToken = async () => {
+export const getToken = async () => {
   if (auth.currentUser) {
     return auth.currentUser.getIdToken();
   }
@@ -200,13 +200,15 @@ export const generateFollowupQuestions = (
   originalQuestion,
   transcript,
   targetRole = 'Software Engineer',
-  count = 2
+  count = 2,
+  questionId = null
 ) =>
   request('POST', `/sessions/${sessionId}/followup`, {
     originalQuestion,
     transcript,
     targetRole,
     count,
+    questionId,
   });
 
 // ── Bookmarks ─────────────────────────────────────────────────────────────────

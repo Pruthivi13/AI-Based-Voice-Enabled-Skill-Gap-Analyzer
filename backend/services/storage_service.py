@@ -1,25 +1,14 @@
-"""
-Small SQLite persistence layer for the FastAPI evaluator MVP.
-
-This mirrors the proposed tables without requiring the TypeScript Prisma service
-to be running during ML-service-only demos.
-"""
+"""Legacy read-only SQLite result listing for old ML-service-only demos."""
 from __future__ import annotations
 
 import json
 import sqlite3
-import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 STORAGE_DIR = PROJECT_ROOT / "backend" / "storage"
 DB_PATH = STORAGE_DIR / "interview_evaluator.sqlite3"
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _connect() -> sqlite3.Connection:
@@ -88,97 +77,6 @@ def _init_db(connection: sqlite3.Connection) -> None:
         """
     )
     connection.commit()
-
-
-def save_evaluation(
-    user_id: str,
-    question_id: str,
-    audio_path: str | None,
-    transcript: str,
-    audio_metrics: dict[str, Any],
-    llm_result: dict[str, Any],
-    final_result: dict[str, Any],
-    response_id: str | None = None,
-) -> str:
-    response_id = response_id or str(uuid.uuid4())
-    created_at = _now()
-
-    with _connect() as connection:
-        connection.execute(
-            """
-            INSERT OR REPLACE INTO responses
-            (id, user_id, question_id, audio_path, transcript, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (response_id, user_id, question_id, audio_path, transcript, created_at),
-        )
-        connection.execute(
-            """
-            INSERT INTO audio_metrics
-            (id, response_id, duration_seconds, words_per_minute, pause_count,
-             long_pause_count, filler_count, fluency_score, confidence_cue_score,
-             raw_metrics_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                str(uuid.uuid4()),
-                response_id,
-                audio_metrics.get("duration_seconds"),
-                audio_metrics.get("words_per_minute"),
-                audio_metrics.get("pause_count"),
-                audio_metrics.get("long_pause_count"),
-                audio_metrics.get("filler_count"),
-                audio_metrics.get("scores", {}).get("fluency"),
-                audio_metrics.get("scores", {}).get("confidence_cues"),
-                json.dumps(audio_metrics),
-                created_at,
-            ),
-        )
-        connection.execute(
-            """
-            INSERT INTO llm_evaluations
-            (id, response_id, keywords_found_json, missing_keywords_json,
-             relevance_score, correctness_score, completeness_score,
-             clarity_score, summary_feedback, raw_llm_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                str(uuid.uuid4()),
-                response_id,
-                json.dumps(llm_result.get("keywords_found", [])),
-                json.dumps(llm_result.get("missing_keywords", [])),
-                llm_result.get("relevance_score"),
-                llm_result.get("correctness_score"),
-                llm_result.get("completeness_score"),
-                llm_result.get("clarity_score"),
-                llm_result.get("final_summary"),
-                json.dumps(llm_result),
-                created_at,
-            ),
-        )
-        connection.execute(
-            """
-            INSERT INTO final_results
-            (id, response_id, content_score, delivery_score, overall_score,
-             final_label, strengths_json, improvements_json, feedback, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                str(uuid.uuid4()),
-                response_id,
-                final_result.get("content_score"),
-                final_result.get("delivery_score"),
-                final_result.get("overall_score"),
-                final_result.get("label"),
-                json.dumps(final_result.get("strengths", [])),
-                json.dumps(final_result.get("improvements", [])),
-                final_result.get("feedback"),
-                created_at,
-            ),
-        )
-        connection.commit()
-
-    return response_id
 
 
 def list_results_for_user(user_id: str, limit: int = 50) -> list[dict[str, Any]]:

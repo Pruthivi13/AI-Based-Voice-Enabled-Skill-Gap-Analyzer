@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getCourses } from './courses.controller';
 import { authMiddleware } from '../../middleware/auth.middleware';
+import { strictRateLimit } from '../../middleware/rateLimit.middleware';
 
 const router = Router();
 
@@ -9,6 +10,6 @@ const router = Router();
  * Returns cached or freshly-fetched course recommendations for a session.
  * Idempotent — safe to call multiple times; DB cache prevents extra Serper hits.
  */
-router.get('/sessions/:id/courses', authMiddleware, getCourses);
+router.get('/sessions/:id/courses', authMiddleware, strictRateLimit, getCourses);
 
 export default router;

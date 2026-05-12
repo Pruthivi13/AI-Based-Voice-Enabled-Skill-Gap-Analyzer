@@ -8,9 +8,12 @@ Last resort: deterministic rubric heuristic so demos still run without keys.
 from __future__ import annotations
 
 import json
+import copy
+import hashlib
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +23,56 @@ from utils.logger import setup_logger
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
 
 logger = setup_logger(__name__)
+
+_eval_cache: dict[str, dict[str, Any]] = {}
+
+
+def _provider_timeout_seconds(default: float = 10.0) -> float:
+    raw = os.getenv("LLM_PROVIDER_TIMEOUT_SECONDS")
+    if raw is None:
+        return default
+    try:
+        return max(1.0, float(raw))
+    except ValueError:
+        return default
+
+
+def _cache_key(
+    question_text: str,
+    transcript: str,
+    expected_keywords: list[str],
+    expected_key_points: list[str],
+    ideal_answer: str,
+) -> str:
+    payload = json.dumps(
+        {
+            "q": question_text.strip().lower(),
+            "t": transcript.strip().lower(),
+            "k": sorted(str(item).strip().lower() for item in expected_keywords),
+            "p": sorted(str(item).strip().lower() for item in expected_key_points),
+            "i": ideal_answer.strip().lower(),
+        },
+        sort_keys=True,
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _call_provider_with_timeout(
+    provider: str,
+    func,
+) -> dict[str, Any]:
+    timeout_seconds = _provider_timeout_seconds()
+    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"llm-{provider}")
+    future = executor.submit(func)
+    try:
+        return future.result(timeout=timeout_seconds)
+    except FuturesTimeoutError as error:
+        future.cancel()
+        raise TimeoutError(
+            f"{provider} content evaluation timed out after {timeout_seconds:.1f}s"
+        ) from error
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 def _provider_max_retries(provider: str, default: int = 0) -> int:
@@ -167,6 +220,7 @@ def _evaluate_with_gemini(prompt: str) -> dict[str, Any]:
     genai.configure(api_key=api_key)
     model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     model = genai.GenerativeModel(model_name)
+    request_options = {"timeout": _provider_timeout_seconds()}
 
     max_retries = _provider_max_retries("gemini")
     for attempt in range(max_retries + 1):
@@ -175,12 +229,23 @@ def _evaluate_with_gemini(prompt: str) -> dict[str, Any]:
                 response = model.generate_content(
                     prompt,
                     generation_config={
-                        "temperature": 0.2,
+                        "temperature": 0,
                         "response_mime_type": "application/json",
                     },
+                    request_options=request_options,
                 )
             except TypeError:
-                response = model.generate_content(prompt, generation_config={"temperature": 0.2})
+                try:
+                    response = model.generate_content(
+                        prompt,
+                        generation_config={"temperature": 0},
+                        request_options=request_options,
+                    )
+                except TypeError:
+                    response = model.generate_content(
+                        prompt,
+                        generation_config={"temperature": 0},
+                    )
 
             raw = (getattr(response, "text", "") or "").strip()
             return _normalize_llm_result(
@@ -209,7 +274,7 @@ def _evaluate_with_groq(prompt: str) -> dict[str, Any]:
     from groq import Groq
 
     model_name = os.getenv("GROQ_LLM_MODEL", "llama-3.1-8b-instant")
-    client = Groq(api_key=api_key)
+    client = Groq(api_key=api_key, timeout=_provider_timeout_seconds())
 
     max_retries = _provider_max_retries("groq")
     for attempt in range(max_retries + 1):
@@ -223,7 +288,8 @@ def _evaluate_with_groq(prompt: str) -> dict[str, Any]:
                     },
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.2,
+                temperature=0,
+                seed=42,
                 max_tokens=1400,
                 response_format={"type": "json_object"},
             )
@@ -338,6 +404,17 @@ def evaluate_content(
 ) -> dict[str, Any]:
     expected_keywords = expected_keywords or []
     expected_key_points = expected_key_points or []
+    key = _cache_key(
+        question_text,
+        transcript,
+        expected_keywords,
+        expected_key_points,
+        ideal_answer,
+    )
+    if key in _eval_cache:
+        logger.info("LLM eval cache hit")
+        return copy.deepcopy(_eval_cache[key])
+
     prompt = _build_prompt(
         question_text,
         transcript,
@@ -356,9 +433,19 @@ def evaluate_content(
     for provider in provider_order:
         try:
             if provider == "gemini":
-                return _evaluate_with_gemini(prompt)
+                result = _call_provider_with_timeout(
+                    provider,
+                    lambda: _evaluate_with_gemini(prompt),
+                )
+                _eval_cache[key] = copy.deepcopy(result)
+                return result
             if provider == "groq":
-                return _evaluate_with_groq(prompt)
+                result = _call_provider_with_timeout(
+                    provider,
+                    lambda: _evaluate_with_groq(prompt),
+                )
+                _eval_cache[key] = copy.deepcopy(result)
+                return result
         except Exception as error:
             errors.append(f"{provider}: {error}")
             logger.warning("%s content evaluation failed: %s", provider, error)
@@ -371,4 +458,5 @@ def evaluate_content(
         keyword_result,
     )
     result["provider_errors"] = errors
+    _eval_cache[key] = copy.deepcopy(result)
     return result

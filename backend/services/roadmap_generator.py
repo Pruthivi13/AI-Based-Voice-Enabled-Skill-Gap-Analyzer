@@ -129,7 +129,8 @@ Return ONLY valid JSON. No explanation.
                     {"role": "system", "content": "You generate detailed roadmap.sh style learning roadmaps as JSON. Return only a valid JSON object. No markdown, no explanation."},
                     {"role": "user",   "content": prompt},
                 ],
-                temperature=0.3,
+                temperature=0,
+                seed=42,
                 max_tokens=6000,
                 response_format={"type": "json_object"},
             )
@@ -369,7 +370,7 @@ Return ONLY valid JSON."""
                     {"role": "system", "content": "Return only valid JSON."},
                     {"role": "user",   "content": prompt},
                 ],
-                temperature=0.3, max_tokens=1000,
+                temperature=0, seed=42, max_tokens=1000,
                 response_format={"type": "json_object"},
             )
             return json.loads((r.choices[0].message.content or "").strip())

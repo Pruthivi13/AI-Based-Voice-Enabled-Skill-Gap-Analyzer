@@ -50,6 +50,7 @@ def get_scorer_model():
         logger.info(f"Loading content model from: {MODEL_PATH}")
         _tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
         _model = AutoModelForSequenceClassification.from_pretrained(MODEL_PATH)
+        torch.set_grad_enabled(False)
         _model.eval()
         logger.info("Content model loaded.")
     return _model, _tokenizer
@@ -305,6 +306,7 @@ def evaluate_answer(
     if not clean_words(reference_text):
         return {
             "model_label": "SKIPPED",
+            "scorer_backend": "skipped",
             "keyword_overlap": 0.0,
             "answer_length": len(clean_words(answer)),
             "final_score": "UNSCORED",

@@ -11,6 +11,19 @@ export const getAllQuestions = async (
       ...(category && { category: category as any }),
       ...(difficulty && { difficulty: difficulty as any }),
     },
+    select: {
+      id: true,
+      content: true,
+      category: true,
+      role: true,
+      difficulty: true,
+      expectedKeywords: true,
+      timeLimitSeconds: true,
+      hints: true,
+      referenceAnswer: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 };
 

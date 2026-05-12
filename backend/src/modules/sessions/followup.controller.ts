@@ -14,7 +14,7 @@ export const generateFollowup = async (
 ) => {
   try {
     const { id: sessionId } = req.params;
-    const { originalQuestion, transcript, targetRole, count = 2 } = req.body;
+    const { originalQuestion, transcript, targetRole, count = 2, questionId } = req.body;
 
     // Verify session ownership
     const session = await prisma.interviewSession.findFirst({
@@ -35,8 +35,35 @@ export const generateFollowup = async (
       count: Math.min(Math.max(Number(count) || 2, 1), 2),
     });
 
-    logger.info(`Generated ${data.followups?.length ?? 0} follow-ups for session ${sessionId}`);
-    return sendSuccess(res, { followups: data.followups ?? [], success: true });
+    const followups = data.followups ?? [];
+    if (followups.length > 0 && questionId) {
+      const response = await prisma.response.findUnique({
+        where: { sessionId_questionId: { sessionId, questionId } },
+      });
+
+      if (response) {
+        const followupRows = followups
+          .map((followup: any) => ({
+            responseId: response.id,
+            question: String(followup.question || '').trim(),
+            reason: followup.reason ? String(followup.reason).trim() : null,
+            topic: followup.topic ? String(followup.topic).trim() : null,
+          }))
+          .filter((followup: any) => followup.question);
+
+        await prisma.$transaction([
+          prisma.followupQuestion.deleteMany({
+            where: { responseId: response.id },
+          }),
+          ...(followupRows.length
+            ? [prisma.followupQuestion.createMany({ data: followupRows })]
+            : []),
+        ]);
+      }
+    }
+
+    logger.info(`Generated ${followups.length} follow-ups for session ${sessionId}`);
+    return sendSuccess(res, { followups, success: true });
   } catch (err) {
     logger.error('Follow-up generation failed:', err);
     // Return empty gracefully — don't crash the interview
