@@ -23,6 +23,19 @@ function mapPipelineResultToAnalysis(mlResult) {
   const content = mlResult?.content_scores ?? {};
   const delivery = mlResult?.delivery_scores ?? {};
   const audio = mlResult?.audio_metrics ?? {};
+  const llmProvider = mlResult?.llm_provider ?? null;
+  const scorerBackend =
+    mlResult?.scorer_backend ??
+    mlResult?.content_model_evaluation?.scorer_backend ??
+    null;
+  const isHeuristic =
+    llmProvider === 'heuristic_fallback' || scorerBackend === 'local_semantic';
+  const bucket = (score) => {
+    if (score == null) return null;
+    const numericScore = Number(score);
+    if (!Number.isFinite(numericScore)) return null;
+    return isHeuristic ? Math.round(numericScore * 2) / 2 : numericScore;
+  };
   const wordsPerMinute = Number(audio.words_per_minute);
   const hasUsablePace =
     Boolean(audio.audio_available) &&
@@ -31,11 +44,11 @@ function mapPipelineResultToAnalysis(mlResult) {
 
   return {
     clarityScore: content.clarity ?? null,
-    fluencyScore: delivery.fluency ?? null,
-    confidenceScore: delivery.confidence_cues ?? null,
+    fluencyScore: bucket(delivery.fluency),
+    confidenceScore: bucket(delivery.confidence_cues),
     relevanceScore: content.relevance ?? null,
     grammarScore: content.clarity ?? null,
-    pronunciationScore: delivery.voice_quality ?? delivery.delivery ?? null,
+    pronunciationScore: bucket(delivery.voice_quality ?? delivery.delivery),
     technicalScore:
       content.correctness != null && content.completeness != null
         ? Number(((content.correctness + content.completeness) / 2).toFixed(1))
@@ -44,11 +57,8 @@ function mapPipelineResultToAnalysis(mlResult) {
     speechRateWpm: hasUsablePace ? Math.round(wordsPerMinute) : null,
     sentiment: mlResult?.label === 'STRONG' ? 'positive' : 'neutral',
     overallScore: mlResult?.overall_score ?? null,
-    llmProvider: mlResult?.llm_provider ?? null,
-    scorerBackend:
-      mlResult?.scorer_backend ??
-      mlResult?.content_model_evaluation?.scorer_backend ??
-      null,
+    llmProvider,
+    scorerBackend,
     feedbackJson: [
       mlResult?.feedback,
       ...(Array.isArray(mlResult?.improvements) ? mlResult.improvements : []),

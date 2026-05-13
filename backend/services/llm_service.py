@@ -13,6 +13,7 @@ import hashlib
 import os
 import re
 import time
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 from typing import Any
@@ -24,7 +25,8 @@ load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
 
 logger = setup_logger(__name__)
 
-_eval_cache: dict[str, dict[str, Any]] = {}
+_MAX_CACHE_SIZE = 500
+_eval_cache: OrderedDict[str, dict[str, Any]] = OrderedDict()
 
 
 def _provider_timeout_seconds(default: float = 10.0) -> float:
@@ -55,6 +57,13 @@ def _cache_key(
         sort_keys=True,
     )
     return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _cache_eval_result(key: str, result: dict[str, Any]) -> None:
+    _eval_cache[key] = copy.deepcopy(result)
+    _eval_cache.move_to_end(key)
+    if len(_eval_cache) > _MAX_CACHE_SIZE:
+        _eval_cache.popitem(last=False)
 
 
 def _call_provider_with_timeout(
@@ -218,7 +227,7 @@ def _evaluate_with_gemini(prompt: str) -> dict[str, Any]:
     import google.generativeai as genai
 
     genai.configure(api_key=api_key)
-    model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
     model = genai.GenerativeModel(model_name)
     request_options = {"timeout": _provider_timeout_seconds()}
 
@@ -413,6 +422,7 @@ def evaluate_content(
     )
     if key in _eval_cache:
         logger.info("LLM eval cache hit")
+        _eval_cache.move_to_end(key)
         return copy.deepcopy(_eval_cache[key])
 
     prompt = _build_prompt(
@@ -437,14 +447,14 @@ def evaluate_content(
                     provider,
                     lambda: _evaluate_with_gemini(prompt),
                 )
-                _eval_cache[key] = copy.deepcopy(result)
+                _cache_eval_result(key, result)
                 return result
             if provider == "groq":
                 result = _call_provider_with_timeout(
                     provider,
                     lambda: _evaluate_with_groq(prompt),
                 )
-                _eval_cache[key] = copy.deepcopy(result)
+                _cache_eval_result(key, result)
                 return result
         except Exception as error:
             errors.append(f"{provider}: {error}")
@@ -458,5 +468,5 @@ def evaluate_content(
         keyword_result,
     )
     result["provider_errors"] = errors
-    _eval_cache[key] = copy.deepcopy(result)
+    _cache_eval_result(key, result)
     return result

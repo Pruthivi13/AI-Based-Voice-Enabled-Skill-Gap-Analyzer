@@ -22,3 +22,4 @@ nltk
 google-generativeai
 rapidfuzz
 praat-parselmouth
+httpx

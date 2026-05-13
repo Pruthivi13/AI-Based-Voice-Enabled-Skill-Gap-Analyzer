@@ -1,13 +1,12 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Form, Query
 from pydantic import BaseModel
-from typing import Any, Optional, Union, cast
+from typing import Any, Optional, cast
 import uvicorn
 import asyncio
 import tempfile
 import os
 import subprocess
 import json
-import re
 import uuid
 import random
 import numpy as np
@@ -105,23 +104,6 @@ def health():
 
 # ── AI Interview Evaluator MVP Endpoints ──
 
-def _parse_form_list(value: Optional[Union[str, list[str]]]) -> list[str]:
-    if not value:
-        return []
-    if isinstance(value, list):
-        items: list[str] = []
-        for item in value:
-            items.extend(_parse_form_list(item))
-        return items
-    try:
-        parsed = json.loads(value)
-        if isinstance(parsed, list):
-            return [str(item).strip() for item in parsed if str(item).strip()]
-    except json.JSONDecodeError:
-        pass
-    return [item.strip() for item in re.split(r",|\n|;", value) if item.strip()]
-
-
 async def _save_upload_file(file: UploadFile) -> str:
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     suffix = Path(file.filename or "").suffix.lower()
@@ -217,8 +199,8 @@ async def analyze_answer_pipeline(
     from backend.services.stt_service import transcribe_file
 
     question = get_question(question_id)
-    override_keywords = _parse_form_list(expected_keywords)
-    override_key_points = _parse_form_list(expected_key_points)
+    override_keywords = expected_keywords or []
+    override_key_points = expected_key_points or []
 
     if question is None:
         if not question_text:

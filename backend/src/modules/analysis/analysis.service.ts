@@ -76,6 +76,14 @@ const scoringModeLabel = (llmProvider?: string | null, scorerBackend?: string | 
   return llmProvider ? 'AI model' : null;
 };
 
+const bucketScore = (score: number | null | undefined, isHeuristic: boolean) => {
+  if (score == null) return null;
+  const numericScore = Number(score);
+  if (!Number.isFinite(numericScore)) return null;
+  if (!isHeuristic) return numericScore;
+  return Math.round(numericScore * 2) / 2;
+};
+
 const mapPipelineResultToAnalysis = (mlResult: any) => {
   const content = mlResult?.content_scores ?? {};
   const delivery = mlResult?.delivery_scores ?? {};
@@ -86,6 +94,16 @@ const mapPipelineResultToAnalysis = (mlResult: any) => {
     mlResult?.content_model_evaluation?.scorer_backend ??
     null;
   const scoringMode = scoringModeLabel(llmProvider, scorerBackend);
+  const isHeuristic =
+    llmProvider === 'heuristic_fallback' || scorerBackend === 'local_semantic';
+  const fluencyScore = bucketScore(delivery.fluency, isHeuristic);
+  const confidenceScore = bucketScore(delivery.confidence_cues, isHeuristic);
+  const pronunciationScore = bucketScore(
+    delivery.voice_quality ?? delivery.delivery,
+    isHeuristic
+  );
+  const hesitationControlScore = bucketScore(delivery.hesitation_control, isHeuristic);
+  const voiceQualityScore = bucketScore(delivery.voice_quality, isHeuristic);
   const wordsPerMinute = Number(audio.words_per_minute);
   const hasUsablePace =
     Boolean(audio.audio_available) &&
@@ -108,11 +126,11 @@ const mapPipelineResultToAnalysis = (mlResult: any) => {
     if (audio.filler_count != null) {
       metricFeedback.push(`Filler analysis: ${audio.filler_count} filler word(s) detected`);
     }
-    if (delivery.hesitation_control != null) {
-      metricFeedback.push(`Hesitation control: ${Number(delivery.hesitation_control).toFixed(1)}/10`);
+    if (hesitationControlScore != null) {
+      metricFeedback.push(`Hesitation control: ${hesitationControlScore.toFixed(1)}/10`);
     }
-    if (delivery.voice_quality != null) {
-      metricFeedback.push(`Voice quality/confidence cues: ${Number(delivery.voice_quality).toFixed(1)}/10`);
+    if (voiceQualityScore != null) {
+      metricFeedback.push(`Voice quality/confidence cues: ${voiceQualityScore.toFixed(1)}/10`);
     }
   } else {
     metricFeedback.push(
@@ -122,11 +140,11 @@ const mapPipelineResultToAnalysis = (mlResult: any) => {
 
   return {
     clarityScore: content.clarity ?? null,
-    fluencyScore: delivery.fluency ?? null,
-    confidenceScore: delivery.confidence_cues ?? null,
+    fluencyScore,
+    confidenceScore,
     relevanceScore: content.relevance ?? null,
     grammarScore: content.clarity ?? null,
-    pronunciationScore: delivery.voice_quality ?? delivery.delivery ?? null,
+    pronunciationScore,
     technicalScore:
       content.correctness != null && content.completeness != null
         ? parseFloat(((content.correctness + content.completeness) / 2).toFixed(1))
