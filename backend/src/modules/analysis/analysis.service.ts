@@ -374,8 +374,9 @@ export const generateMockAnalysis = async (
       sentiment: 'positive',
       overallScore: 7.4,
       llmProvider: null,
-      scorerBackend: null,
+      scorerBackend: 'fallback_mock',
       feedbackJson: [
+        'Fallback analysis: ML services unavailable; these scores are provisional.',
         'Good structure',
         'Add more examples',
         'Reduce filler words',
@@ -431,6 +432,10 @@ export const generateMockAnalysis = async (
             scorerBackend: mlResult.scorerBackend ?? null,
             feedbackJson: mlResult.feedbackJson,
           };
+        } else {
+          logger.warn(
+            `Both ML analyzers failed for response ${response.id}; using fallback analysis scores`
+          );
         }
       }
     }

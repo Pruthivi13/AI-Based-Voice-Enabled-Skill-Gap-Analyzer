@@ -111,7 +111,7 @@ export default function WarmupPage() {
       const token = await getToken();
       if (!token) throw new Error('Missing auth token');
       const ws = new WebSocket(
-        `${wsUrl}/ws/transcribe/warmup-${Date.now()}?token=${encodeURIComponent(token)}`
+        `${wsUrl}/ws/transcribe/warmup-${crypto.randomUUID()}?token=${encodeURIComponent(token)}`
       );
       wsRef.current = ws;
 
