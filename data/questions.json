@@ -1,0 +1,124 @@
+[
+  {
+    "id": "q_rest_api",
+    "question_text": "What is a REST API?",
+    "content": "What is a REST API?",
+    "topic": "Backend",
+    "category": "TECHNICAL",
+    "difficulty": "EASY",
+    "expected_keywords": [
+      "REST",
+      "HTTP",
+      "resources",
+      "stateless",
+      "GET",
+      "POST",
+      "PUT",
+      "DELETE"
+    ],
+    "expected_key_points": [
+      "REST is an architectural style for web APIs",
+      "Clients interact with resources over HTTP",
+      "Common methods include GET, POST, PUT, and DELETE",
+      "REST APIs are usually stateless"
+    ],
+    "ideal_answer": "A REST API is an interface based on representational state transfer where clients interact with resources over HTTP using standard methods such as GET, POST, PUT, and DELETE in a stateless manner."
+  },
+  {
+    "id": "q_osi_model",
+    "question_text": "Explain the OSI model.",
+    "content": "Explain the OSI model.",
+    "topic": "Computer Networks",
+    "category": "TECHNICAL",
+    "difficulty": "MEDIUM",
+    "expected_keywords": [
+      "physical layer",
+      "data link layer",
+      "network layer",
+      "transport layer",
+      "session layer",
+      "presentation layer",
+      "application layer",
+      "routing",
+      "end-to-end delivery"
+    ],
+    "expected_key_points": [
+      "OSI has seven conceptual layers",
+      "Each layer has a specific communication responsibility",
+      "Network layer handles routing and logical addressing",
+      "Transport layer handles end-to-end delivery and reliability",
+      "Application layer supports user-facing network services"
+    ],
+    "ideal_answer": "The OSI model is a seven-layer networking model: physical, data link, network, transport, session, presentation, and application. Each layer has a specific responsibility, such as routing at the network layer and end-to-end delivery at the transport layer."
+  },
+  {
+    "id": "q_database_indexing",
+    "question_text": "What is database indexing?",
+    "content": "What is database indexing?",
+    "topic": "Databases",
+    "category": "TECHNICAL",
+    "difficulty": "EASY",
+    "expected_keywords": [
+      "index",
+      "query",
+      "columns",
+      "faster lookup",
+      "read performance",
+      "storage overhead",
+      "write overhead"
+    ],
+    "expected_key_points": [
+      "An index is a data structure on one or more columns",
+      "Indexes help databases find rows faster",
+      "Indexes improve read/query performance",
+      "Indexes add storage cost and can slow writes"
+    ],
+    "ideal_answer": "Database indexing creates a data structure on selected columns so the database can locate rows faster during queries. It improves read speed, but adds storage cost and can slow inserts or updates."
+  },
+  {
+    "id": "q_polymorphism",
+    "question_text": "What is polymorphism in object-oriented programming?",
+    "content": "What is polymorphism in object-oriented programming?",
+    "topic": "Object-Oriented Programming",
+    "category": "TECHNICAL",
+    "difficulty": "EASY",
+    "expected_keywords": [
+      "polymorphism",
+      "same interface",
+      "different implementations",
+      "method overriding",
+      "objects",
+      "classes"
+    ],
+    "expected_key_points": [
+      "Polymorphism lets the same interface represent different behavior",
+      "Different classes can implement or override the same method",
+      "It improves flexibility and reusable design",
+      "Runtime polymorphism is commonly achieved through method overriding"
+    ],
+    "ideal_answer": "Polymorphism allows the same interface or method name to represent different implementations depending on the object or class being used."
+  },
+  {
+    "id": "q_binary_search",
+    "question_text": "What is the time complexity of binary search and why?",
+    "content": "What is the time complexity of binary search and why?",
+    "topic": "Algorithms",
+    "category": "TECHNICAL",
+    "difficulty": "MEDIUM",
+    "expected_keywords": [
+      "O(log n)",
+      "sorted",
+      "halves",
+      "search space",
+      "comparison",
+      "middle element"
+    ],
+    "expected_key_points": [
+      "Binary search requires sorted data",
+      "Each comparison checks the middle element",
+      "Each step removes about half of the remaining search space",
+      "This repeated halving gives O(log n) time complexity"
+    ],
+    "ideal_answer": "Binary search runs in O(log n) time because it repeatedly compares against the middle element and halves the search space on each step, assuming the collection is sorted."
+  }
+]

@@ -1,186 +1,224 @@
 /**
- * Full pipeline test: saves a transcript, verifies scoring runs,
- * checks DB for stored ResponseAnalysis.
+ * Full no-frontend scoring pipeline check.
  *
- * Run: node test_scoring_pipeline.js
- * (from backend/ directory, with both services running)
+ * Requires the ML service on :8000:
+ *   cd .. && source venv/bin/activate && uvicorn backend.main:app --port 8000
+ *
+ * Run from backend/:
+ *   node test_scoring_pipeline.js
  */
 const { PrismaClient } = require('@prisma/client');
+
 const prisma = new PrismaClient();
+const ML_URL = process.env.ML_SERVICE_URL || 'http://localhost:8000';
 
-const API = 'http://localhost:3001';
-
-async function getAuthToken() {
-  // Use an existing user token — replace with a valid Firebase token
-  // OR use a test session directly via Prisma bypassing auth
-  return null; // we'll go direct via Prisma for this test
+function assert(condition, message) {
+  if (!condition) {
+    throw new Error(message);
+  }
+  console.log(`  [ok] ${message}`);
 }
 
-async function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
+function mapPipelineResultToAnalysis(mlResult) {
+  const content = mlResult?.content_scores ?? {};
+  const delivery = mlResult?.delivery_scores ?? {};
+  const audio = mlResult?.audio_metrics ?? {};
+  const llmProvider = mlResult?.llm_provider ?? null;
+  const scorerBackend =
+    mlResult?.scorer_backend ??
+    mlResult?.content_model_evaluation?.scorer_backend ??
+    null;
+  const isHeuristic =
+    llmProvider === 'heuristic_fallback' || scorerBackend === 'local_semantic';
+  const bucket = (score) => {
+    if (score == null) return null;
+    const numericScore = Number(score);
+    if (!Number.isFinite(numericScore)) return null;
+    return isHeuristic ? Math.round(numericScore * 2) / 2 : numericScore;
+  };
+  const wordsPerMinute = Number(audio.words_per_minute);
+  const hasUsablePace =
+    Boolean(audio.audio_available) &&
+    Number.isFinite(wordsPerMinute) &&
+    wordsPerMinute > 0;
+
+  return {
+    clarityScore: content.clarity ?? null,
+    fluencyScore: bucket(delivery.fluency),
+    confidenceScore: bucket(delivery.confidence_cues),
+    relevanceScore: content.relevance ?? null,
+    grammarScore: content.clarity ?? null,
+    pronunciationScore: bucket(delivery.voice_quality ?? delivery.delivery),
+    technicalScore:
+      content.correctness != null && content.completeness != null
+        ? Number(((content.correctness + content.completeness) / 2).toFixed(1))
+        : content.correctness ?? null,
+    fillerWordCount: audio.filler_count ?? null,
+    speechRateWpm: hasUsablePace ? Math.round(wordsPerMinute) : null,
+    sentiment: mlResult?.label === 'STRONG' ? 'positive' : 'neutral',
+    overallScore: mlResult?.overall_score ?? null,
+    llmProvider,
+    scorerBackend,
+    feedbackJson: [
+      mlResult?.feedback,
+      ...(Array.isArray(mlResult?.improvements) ? mlResult.improvements : []),
+      `LLM provider: ${mlResult?.llm_provider}`,
+      `Content scorer: ${mlResult?.content_model_evaluation?.scorer_backend}`,
+    ].filter(Boolean),
+  };
+}
+
+async function callAnalyzer({ response, question, userId }) {
+  const form = new FormData();
+  form.append('response_id', response.id);
+  form.append('user_id', userId);
+  form.append('question_id', question.id);
+  form.append('question_text', question.content);
+  form.append('transcript', response.transcript);
+  (question.expectedKeywords || []).forEach((keyword) => {
+    form.append('expected_keywords', String(keyword));
+  });
+  if (question.referenceAnswer) {
+    form.append('expected_key_points', question.referenceAnswer);
+    form.append('ideal_answer', question.referenceAnswer);
+  }
+
+  const mlResponse = await fetch(`${ML_URL}/api/analyze-answer`, {
+    method: 'POST',
+    body: form,
+  });
+
+  if (!mlResponse.ok) {
+    const text = await mlResponse.text();
+    throw new Error(`ML service returned ${mlResponse.status}: ${text}`);
+  }
+
+  return mlResponse.json();
 }
 
 async function run() {
-  console.log('\n══════════════════════════════════════════');
-  console.log('  SCORING PIPELINE TEST');
-  console.log('══════════════════════════════════════════\n');
+  console.log('\nSCORING PIPELINE DB VERIFY\n');
 
-  // 1. Find a real question with referenceAnswer
-  const question = await prisma.question.findFirst({
-    where: { referenceAnswer: { not: null } },
-  });
+  const health = await fetch(`${ML_URL}/health`);
+  assert(health.ok, `ML service is reachable at ${ML_URL}`);
 
-  if (!question) {
-    console.error('❌ No question with referenceAnswer found.');
-    console.error(
-      '   Run: npx ts-node src/scripts/importQuestionBank.ts first'
-    );
-    process.exit(1);
-  }
-
-  console.log(`✓ Found question: "${question.content.slice(0, 60)}..."`);
-  console.log(`  Reference: "${question.referenceAnswer.slice(0, 60)}..."`);
-
-  // 2. Find a real session and user
-  const session = await prisma.interviewSession.findFirst({
-    orderBy: { createdAt: 'desc' },
-  });
-
-  if (!session) {
-    console.error('❌ No sessions in DB. Create one via the frontend first.');
-    process.exit(1);
-  }
-  console.log(`✓ Using session: ${session.id}`);
-
-  // 3. Create a test response with a known transcript
-  const testTranscript = `REST is an architectural style for stateless client-server 
-    communication over HTTP. It uses standard methods like GET, POST, PUT, and DELETE 
-    to perform operations on resources identified by URLs. It is widely used for web APIs.`;
-
-  // Upsert response
-  let response;
-  const existing = await prisma.response.findUnique({
-    where: {
-      sessionId_questionId: { sessionId: session.id, questionId: question.id },
+  const suffix = Date.now();
+  const user = await prisma.user.create({
+    data: {
+      email: `pipeline_${suffix}@example.test`,
+      supabaseUid: `pipeline_${suffix}`,
+      fullName: 'Pipeline Verify User',
+      emailVerified: true,
     },
   });
 
-  if (existing) {
-    response = await prisma.response.update({
-      where: { id: existing.id },
-      data: { transcript: testTranscript, answerOrder: 1 },
+  let questionId;
+  try {
+    const question = await prisma.question.create({
+      data: {
+        content: 'Explain REST APIs.',
+        category: 'TECHNICAL',
+        difficulty: 'EASY',
+        expectedKeywords: ['REST', 'stateless', 'HTTP', 'resources', 'GET', 'POST'],
+        referenceAnswer:
+          'A REST API is stateless, exposes resources through URLs, and uses HTTP methods such as GET, POST, PUT, and DELETE.',
+        isActive: true,
+      },
     });
-  } else {
-    response = await prisma.response.create({
+    questionId = question.id;
+
+    const session = await prisma.interviewSession.create({
+      data: {
+        userId: user.id,
+        title: 'Pipeline Verify Session',
+        interviewType: 'TECHNICAL',
+        targetRole: 'Software Engineer',
+        difficulty: 'EASY',
+        questionCount: 1,
+        status: 'PROCESSING',
+      },
+    });
+
+    const response = await prisma.response.create({
       data: {
         sessionId: session.id,
         questionId: question.id,
-        transcript: testTranscript,
         answerOrder: 1,
+        transcript:
+          'REST APIs are stateless HTTP interfaces. They expose resources through URLs and use methods like GET, POST, PUT, and DELETE.',
       },
     });
-  }
-  console.log(`✓ Response created/updated: ${response.id}`);
 
-  // 4. Call the ML service directly to score it
-  console.log('\n  Calling ML service /internal/evaluate-answer...');
-  const mlResponse = await fetch(
-    'http://localhost:8000/internal/evaluate-answer',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        question: question.content,
-        answer: testTranscript,
-        reference: question.referenceAnswer,
-      }),
+    const mlResult = await callAnalyzer({
+      response,
+      question,
+      userId: user.id,
+    });
+
+    assert(mlResult.success === true, 'ML analyzer returns success');
+    assert(mlResult.llm_provider, `LLM provider recorded: ${mlResult.llm_provider}`);
+    assert(mlResult.keyword_analysis.keyword_score >= 8, 'expectedKeywords are evaluated');
+    assert(mlResult.content_model_score != null, 'content_scorer contributes to final score');
+    assert(mlResult.audio_metrics.audio_available === false, 'transcript-only DB test marks audio unavailable');
+
+    const analysisData = mapPipelineResultToAnalysis(mlResult);
+    const analysis = await prisma.responseAnalysis.create({
+      data: {
+        responseId: response.id,
+        ...analysisData,
+      },
+    });
+
+    assert(analysis.overallScore != null, `ResponseAnalysis saved overallScore=${analysis.overallScore}`);
+    assert(analysis.relevanceScore != null, 'ResponseAnalysis saved relevanceScore');
+    assert(analysis.technicalScore != null, 'ResponseAnalysis saved technicalScore');
+
+    const report = await prisma.report.create({
+      data: {
+        sessionId: session.id,
+        overallScore: analysis.overallScore ?? 0,
+        ratingLabel:
+          (analysis.overallScore ?? 0) >= 7
+            ? 'Good'
+            : (analysis.overallScore ?? 0) >= 5
+              ? 'Average'
+              : 'Needs Improvement',
+        summary: 'Verified no-frontend scoring pipeline.',
+        strengthsJson: mlResult.strengths ?? [],
+        weaknessesJson: mlResult.improvements ?? [],
+        recommendationsJson: ['Continue practicing reference-backed answers.'],
+        radarDataJson: {
+          labels: ['Communication', 'Confidence', 'Technical', 'Clarity', 'Fluency'],
+          values: [
+            analysis.clarityScore,
+            analysis.confidenceScore,
+            analysis.technicalScore,
+            analysis.clarityScore,
+            analysis.fluencyScore,
+          ],
+        },
+      },
+    });
+
+    assert(report.overallScore === analysis.overallScore, 'Report saved from actual analysis');
+    await prisma.interviewSession.update({
+      where: { id: session.id },
+      data: { status: 'COMPLETED', overallScore: analysis.overallScore },
+    });
+    assert(true, 'Session marked COMPLETED with actual score');
+
+    console.log('\nAll DB pipeline checks passed.\n');
+  } finally {
+    await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
+    if (questionId) {
+      await prisma.question.delete({ where: { id: questionId } }).catch(() => {});
     }
-  );
-
-  if (!mlResponse.ok) {
-    console.error(`❌ ML service returned ${mlResponse.status}`);
-    const err = await mlResponse.text();
-    console.error(err);
-    process.exit(1);
+    await prisma.$disconnect();
   }
-
-  const scoreResult = await mlResponse.json();
-  console.log('\n  ── ML Service Response ──────────────────');
-  console.log(JSON.stringify(scoreResult, null, 4));
-
-  // Validate response shape
-  const required = [
-    'model_label',
-    'keyword_overlap',
-    'answer_length',
-    'final_score',
-    'feedback',
-  ];
-  for (const key of required) {
-    if (key in scoreResult) {
-      console.log(`  ✓ Has '${key}': ${scoreResult[key]}`);
-    } else {
-      console.error(`  ✗ MISSING '${key}'`);
-    }
-  }
-
-  // 5. Save scoring result to DB manually
-  const overallScore =
-    scoreResult.final_score === 'STRONG'
-      ? 8.5
-      : scoreResult.final_score === 'AVERAGE'
-        ? 6.5
-        : 4.5;
-
-  const analysis = await prisma.responseAnalysis.upsert({
-    where: { responseId: response.id },
-    update: {
-      relevanceScore: scoreResult.keyword_overlap * 10,
-      technicalScore: overallScore,
-      overallScore,
-      feedbackJson: [scoreResult.feedback],
-      sentiment: scoreResult.final_score === 'STRONG' ? 'positive' : 'neutral',
-    },
-    create: {
-      responseId: response.id,
-      relevanceScore: scoreResult.keyword_overlap * 10,
-      technicalScore: overallScore,
-      overallScore,
-      feedbackJson: [scoreResult.feedback],
-      sentiment: scoreResult.final_score === 'STRONG' ? 'positive' : 'neutral',
-    },
-  });
-
-  console.log('\n  ── DB Stored ResponseAnalysis ───────────');
-  console.log(`  responseId:      ${analysis.responseId}`);
-  console.log(`  overallScore:    ${analysis.overallScore}`);
-  console.log(`  relevanceScore:  ${analysis.relevanceScore}`);
-  console.log(`  technicalScore:  ${analysis.technicalScore}`);
-  console.log(`  feedbackJson:    ${JSON.stringify(analysis.feedbackJson)}`);
-  console.log(`  sentiment:       ${analysis.sentiment}`);
-
-  // 6. Read it back to confirm persistence
-  const readBack = await prisma.responseAnalysis.findUnique({
-    where: { responseId: response.id },
-  });
-
-  console.log('\n  ── Verification (read back from DB) ─────');
-  if (readBack && readBack.overallScore === overallScore) {
-    console.log(`  ✓ Data persisted correctly in DB`);
-    console.log(`  ✓ overallScore matches: ${readBack.overallScore}`);
-  } else {
-    console.error(`  ✗ Data mismatch in DB`);
-  }
-
-  console.log('\n══════════════════════════════════════════');
-  console.log('  ALL CHECKS COMPLETE');
-  console.log('══════════════════════════════════════════\n');
-
-  await prisma.$disconnect();
 }
 
-run().catch(async (e) => {
-  console.error('Fatal:', e);
+run().catch(async (error) => {
+  console.error('\nPipeline verification failed:', error);
   await prisma.$disconnect();
   process.exit(1);
 });

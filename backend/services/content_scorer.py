@@ -4,9 +4,12 @@ content_scorer.py — Hybrid content evaluation using the fine-tuned binary mode
 Loads interview_content_model_binary and scores transcripts
 using keyword overlap + model prediction (hybrid logic).
 """
+from __future__ import annotations
+
 import os
 import re
-from typing import Optional
+from math import sqrt
+from typing import Any, Optional
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -20,16 +23,34 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.normpath(
     os.path.join(_THIS_DIR, "../../models/interview_content_model_binary")
 )
+MODEL_WEIGHT_FILES = (
+    "pytorch_model.bin",
+    "model.safetensors",
+    "tf_model.h5",
+    "flax_model.msgpack",
+)
+
+
+def _model_files_present() -> bool:
+    return os.path.isdir(MODEL_PATH) and any(
+        os.path.exists(os.path.join(MODEL_PATH, filename))
+        for filename in MODEL_WEIGHT_FILES
+    )
 
 
 def get_scorer_model():
     global _model, _tokenizer
     if _model is None:
+        if not _model_files_present():
+            raise FileNotFoundError(
+                f"Content scorer weights were not found in {MODEL_PATH}"
+            )
         from transformers import AutoTokenizer, AutoModelForSequenceClassification
         import torch
         logger.info(f"Loading content model from: {MODEL_PATH}")
         _tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
         _model = AutoModelForSequenceClassification.from_pretrained(MODEL_PATH)
+        torch.set_grad_enabled(False)
         _model.eval()
         logger.info("Content model loaded.")
     return _model, _tokenizer
@@ -52,6 +73,100 @@ def keyword_overlap(answer: str, reference: str) -> float:
         return 0.0
     intersection = answer_words & ref_words
     return round(len(intersection) / len(ref_words), 3)
+
+
+def _clamp(value: float, minimum: float = 0.0, maximum: float = 10.0) -> float:
+    return max(minimum, min(maximum, value))
+
+
+def _reference_coverage(answer: str, reference: str) -> float:
+    answer_words = set(clean_words(answer))
+    reference_words = set(clean_words(reference))
+    if not reference_words:
+        return 0.0
+    return len(answer_words & reference_words) / len(reference_words)
+
+
+def _cosine_from_counts(left: dict[str, int], right: dict[str, int]) -> float:
+    keys = set(left) | set(right)
+    if not keys:
+        return 0.0
+    dot = sum(left.get(key, 0) * right.get(key, 0) for key in keys)
+    left_norm = sqrt(sum(value * value for value in left.values()))
+    right_norm = sqrt(sum(value * value for value in right.values()))
+    if not left_norm or not right_norm:
+        return 0.0
+    return dot / (left_norm * right_norm)
+
+
+def _ngram_counts(text: str) -> dict[str, int]:
+    words = clean_words(text)
+    counts: dict[str, int] = {}
+    for word in words:
+        counts[word] = counts.get(word, 0) + 1
+    for first, second in zip(words, words[1:]):
+        key = f"{first} {second}"
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def semantic_similarity(answer: str, reference: str) -> float:
+    """
+    Local semantic similarity for environments where the fine-tuned weights are
+    not present. Uses TF-IDF when sklearn is installed, with a deterministic
+    unigram/bigram cosine fallback.
+    """
+    answer = answer or ""
+    reference = reference or ""
+    if not clean_words(answer) or not clean_words(reference):
+        return 0.0
+
+    try:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.metrics.pairwise import cosine_similarity
+
+        vectorizer = TfidfVectorizer(
+            lowercase=True,
+            stop_words="english",
+            ngram_range=(1, 2),
+            token_pattern=r"(?u)\b[a-zA-Z][a-zA-Z0-9+#.-]*\b",
+        )
+        matrix = vectorizer.fit_transform([answer, reference])
+        return round(float(cosine_similarity(matrix[0], matrix[1])[0][0]), 3)
+    except Exception as error:
+        logger.debug("sklearn semantic similarity unavailable: %s", error)
+        return round(_cosine_from_counts(_ngram_counts(answer), _ngram_counts(reference)), 3)
+
+
+def _score_from_signals(
+    overlap: float,
+    semantic: float,
+    answer_length: int,
+    model_label: str,
+) -> float:
+    coverage_component = max(overlap, semantic * 0.9)
+    model_component = 0.82 if model_label == "STRONG" else 0.35
+    length_component = min(answer_length / 45, 1.0)
+    return round(
+        _clamp(
+            (
+                coverage_component * 0.52
+                + semantic * 0.28
+                + model_component * 0.12
+                + length_component * 0.08
+            )
+            * 10
+        ),
+        2,
+    )
+
+
+def _score_to_label(score: float) -> str:
+    if score >= 7.5:
+        return "STRONG"
+    if score >= 5.0:
+        return "AVERAGE"
+    return "WEAK"
 
 
 def model_predict_binary(question: str, answer: str) -> str:
@@ -102,23 +217,45 @@ def hybrid_score(question: str, answer: str, reference: str) -> dict:
     - overlap >= 0.4  OR model says STRONG    → AVERAGE  
     - everything else                         → WEAK
     """
-    model_label = model_predict_binary(question, answer)
+    model_error: Optional[str] = None
+    scorer_backend = "transformer"
+    try:
+        model_label = model_predict_binary(question, answer)
+    except Exception as error:
+        model_error = str(error)
+        scorer_backend = "local_semantic"
+        logger.warning(
+            "Content scorer model unavailable; using local semantic signal: %s",
+            error,
+        )
+
     overlap = keyword_overlap(answer, reference)
+    semantic = semantic_similarity(answer, reference)
     answer_length = len(clean_words(answer))
+    if model_error:
+        model_label = "STRONG" if semantic >= 0.52 or overlap >= 0.55 else "NOT_STRONG"
 
-    if overlap >= 0.7 or (model_label == "STRONG" and overlap >= 0.3):
-        final_score = "STRONG"
-    elif overlap >= 0.4 or model_label == "STRONG":
-        final_score = "AVERAGE"
-    else:
-        final_score = "WEAK"
+    content_score = _score_from_signals(
+        overlap=overlap,
+        semantic=semantic,
+        answer_length=answer_length,
+        model_label=model_label,
+    )
+    final_score = _score_to_label(content_score)
 
-    return {
+    result = {
         "model_label": model_label,
+        "scorer_backend": scorer_backend,
         "keyword_overlap": overlap,
+        "semantic_similarity": semantic,
+        "reference_coverage": round(_reference_coverage(answer, reference), 3),
         "answer_length": answer_length,
         "final_score": final_score,
+        "content_score": content_score,
     }
+    if model_error:
+        result["model_error"] = model_error
+    return result
 
 
 
@@ -136,13 +273,47 @@ def generate_feedback(final_score: str, overlap: float, answer_length: int) -> s
         return "Your answer needs improvement. Focus on the core concepts and use relevant terminology."
 
 
-def evaluate_answer(question: str, answer: str, reference: str) -> dict:
+def _reference_with_expected_terms(
+    reference: str,
+    expected_keywords: list[str] | None = None,
+    expected_key_points: list[str] | None = None,
+) -> str:
+    parts = [reference or ""]
+    if expected_key_points:
+        parts.extend(expected_key_points)
+    if expected_keywords:
+        parts.append(" ".join(expected_keywords))
+    return " ".join(part for part in parts if part).strip()
+
+
+def evaluate_answer(
+    question: str,
+    answer: str,
+    reference: str,
+    expected_keywords: list[str] | None = None,
+    expected_key_points: list[str] | None = None,
+) -> dict[str, Any]:
     """
     Full evaluation pipeline.
     Returns the complete scoring result dict.
     """
     logger.info(f"Evaluating answer for question: {question[:60]}...")
-    scores = hybrid_score(question, answer, reference)
+    reference_text = _reference_with_expected_terms(
+        reference,
+        expected_keywords=expected_keywords,
+        expected_key_points=expected_key_points,
+    )
+    if not clean_words(reference_text):
+        return {
+            "model_label": "SKIPPED",
+            "scorer_backend": "skipped",
+            "keyword_overlap": 0.0,
+            "answer_length": len(clean_words(answer)),
+            "final_score": "UNSCORED",
+            "content_score": None,
+            "feedback": "No reference answer or expected keywords were available for content-model scoring.",
+        }
+    scores = hybrid_score(question, answer, reference_text)
     feedback = generate_feedback(
         scores["final_score"],
         scores["keyword_overlap"],

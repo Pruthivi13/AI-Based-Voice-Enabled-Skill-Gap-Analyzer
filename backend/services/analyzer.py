@@ -1,12 +1,22 @@
 """
 Response analyzer — scores transcript across multiple dimensions.
-Uses keyword matching, sentence structure, and NLP features.
+Runs the same LLM/content/audio evaluator used by the main analysis pipeline.
 """
+from __future__ import annotations
+
+import asyncio
+import os
 import re
-from typing import Optional
+import tempfile
+from pathlib import Path
+from typing import Any, Optional
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
+
+ALLOWED_AUDIO_SUFFIXES = {".webm", ".wav", ".mp3", ".m4a", ".mp4", ".ogg"}
 
 def count_filler_words(text: str) -> int:
     """Count filler words in transcript."""
@@ -148,20 +158,106 @@ def generate_feedback(scores: dict, text: str) -> list:
     
     return feedback
 
-async def analyze_transcript(response_id: str, transcript: str) -> dict:
+
+def _download_audio_url(audio_url: str) -> str:
+    suffix = Path(urlparse(audio_url).path).suffix.lower()
+    if suffix not in ALLOWED_AUDIO_SUFFIXES:
+        suffix = ".webm"
+
+    request = Request(audio_url, headers={"User-Agent": "AI-Interview-Evaluator/1.0"})
+    with urlopen(request, timeout=45) as response:
+        contents = response.read()
+    if not contents:
+        raise ValueError("Downloaded audio file is empty")
+
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(contents)
+        return tmp.name
+
+
+def _numeric(value: Any, default: float | None = None) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _pipeline_to_legacy_analysis(response_id: str, final_result: dict[str, Any]) -> dict:
+    content = final_result.get("content_scores", {})
+    delivery = final_result.get("delivery_scores", {})
+    audio = final_result.get("audio_metrics", {})
+
+    correctness = _numeric(content.get("correctness"), 0.0) or 0.0
+    completeness = _numeric(content.get("completeness"), 0.0) or 0.0
+    technical = round((correctness + completeness) / 2, 1)
+    wpm = _numeric(audio.get("words_per_minute"))
+    has_audio_wpm = bool(audio.get("audio_available")) and wpm is not None and wpm > 0
+
+    feedback = [
+        final_result.get("feedback"),
+        *list(final_result.get("improvements", [])),
+    ]
+    if audio.get("audio_available"):
+        if has_audio_wpm:
+            feedback.append(f"Speaking speed: {round(wpm or 0)} WPM from recorded audio.")
+        if audio.get("pause_count") is not None:
+            feedback.append(
+                f"Pause analysis: {audio.get('pause_count')} pause(s), "
+                f"{audio.get('long_pause_count', 0)} long pause(s)."
+            )
+    else:
+        feedback.append(
+            "Delivery timing needs recorded audio; transcript-only analysis cannot measure real pauses."
+        )
+
+    return {
+        "responseId": response_id,
+        "clarityScore": content.get("clarity"),
+        "fluencyScore": delivery.get("fluency"),
+        "confidenceScore": delivery.get("confidence_cues"),
+        "relevanceScore": content.get("relevance"),
+        "grammarScore": content.get("clarity"),
+        "pronunciationScore": delivery.get("voice_quality") or delivery.get("delivery"),
+        "technicalScore": technical,
+        "fillerWordCount": audio.get("filler_count"),
+        "speechRateWpm": round(wpm) if has_audio_wpm else None,
+        "sentiment": "positive" if final_result.get("label") == "STRONG" else "neutral",
+        "overallScore": final_result.get("overall_score"),
+        "feedbackJson": [item for item in feedback if item],
+        "pipelineResult": final_result,
+    }
+
+
+async def analyze_transcript(
+    response_id: str,
+    transcript: str,
+    question_text: Optional[str] = None,
+    audio_url: Optional[str] = None,
+    audio_path: Optional[str] = None,
+    expected_keywords: Optional[list[str]] = None,
+    expected_key_points: Optional[list[str]] = None,
+    ideal_answer: str = "",
+    stt_segments: Optional[list[dict[str, Any]]] = None,
+) -> dict:
     """
     Analyzes a transcript and returns scores across multiple dimensions.
     
     Args:
         response_id: ID of the response
         transcript: Transcribed text to analyze
+        question_text: Interview question being answered
+        audio_url/audio_path: Optional recorded audio for delivery metrics
+        expected_keywords/expected_key_points/ideal_answer: Reference rubric
         
     Returns:
         dict: Analysis scores and feedback
     """
     logger.info(f"Analyzing transcript for response: {response_id}")
+    expected_keywords = expected_keywords or []
+    expected_key_points = expected_key_points or []
+    question_text = question_text or "Interview question"
     
-    if not transcript or len(transcript.strip()) < 5:
+    if (not transcript or len(transcript.strip()) < 5) and not (audio_url or audio_path):
         logger.warning("Empty or very short transcript received")
         return {
             "responseId": response_id,
@@ -178,44 +274,115 @@ async def analyze_transcript(response_id: str, transcript: str) -> dict:
             "overallScore": 5.0,
             "feedbackJson": ["No transcript available for analysis."]
         }
-    
-    # Calculate all scores
-    clarity = score_clarity(transcript)
-    fluency = score_fluency(transcript)
-    confidence = score_confidence(transcript)
-    relevance = score_relevance(transcript)
-    technical = score_technical(transcript)
-    filler_count = count_filler_words(transcript)
-    speech_rate = calculate_speech_rate(transcript)
-    
-    scores = {
-        "clarityScore": clarity,
-        "fluencyScore": fluency,
-        "confidenceScore": confidence,
-        "relevanceScore": relevance,
-        "grammarScore": round((clarity + fluency) / 2, 1),
-        "pronunciationScore": round(fluency * 0.9, 1),
-        "technicalScore": technical,
-    }
-    
-    # Calculate overall score (weighted average)
-    overall = round(
-        (clarity * 0.2 + fluency * 0.15 + confidence * 0.2 +
-         relevance * 0.25 + technical * 0.2),
-        1
-    )
-    
-    feedback = generate_feedback({**scores, 'overallScore': overall}, transcript)
-    
-    result = {
-        "responseId": response_id,
-        **scores,
-        "fillerWordCount": filler_count,
-        "speechRateWpm": speech_rate,
-        "sentiment": "positive" if overall >= 7 else "neutral",
-        "overallScore": overall,
-        "feedbackJson": feedback
-    }
-    
-    logger.info(f"Analysis complete. Overall score: {overall}")
-    return result
+
+    from backend.services.audio_analysis import analyze_audio
+    from backend.services.content_scorer import evaluate_answer as evaluate_content_model
+    from backend.services.keyword_extractor import extract_keywords
+    from backend.services.llm_service import evaluate_content
+    from backend.services.scoring import build_final_result
+    from backend.services.stt_service import transcribe_file
+
+    downloaded_audio_path: Optional[str] = None
+    if not audio_path and audio_url:
+        try:
+            loop = asyncio.get_event_loop()
+            downloaded_audio_path = await loop.run_in_executor(
+                None,
+                lambda: _download_audio_url(audio_url),
+            )
+            audio_path = downloaded_audio_path
+        except Exception as error:
+            logger.warning("Could not download audio for response %s: %s", response_id, error)
+
+    try:
+        loop = asyncio.get_event_loop()
+        if (not transcript or len(transcript.strip()) < 5) and audio_path:
+            stt_result = await loop.run_in_executor(
+                None,
+                lambda: transcribe_file(audio_path or ""),
+            )
+            transcript = str(stt_result.get("transcript") or "").strip()
+            if not stt_segments:
+                stt_segments = stt_result.get("segments") or []
+
+        if not transcript or len(transcript.strip()) < 5:
+            logger.warning("No usable transcript available after audio transcription")
+            return {
+                "responseId": response_id,
+                "clarityScore": 5.0,
+                "fluencyScore": 5.0,
+                "confidenceScore": 5.0,
+                "relevanceScore": 5.0,
+                "grammarScore": 5.0,
+                "pronunciationScore": 5.0,
+                "technicalScore": 5.0,
+                "fillerWordCount": 0,
+                "speechRateWpm": 0,
+                "sentiment": "neutral",
+                "overallScore": 5.0,
+                "feedbackJson": ["No transcript available for analysis."],
+            }
+
+        if not expected_key_points and ideal_answer:
+            expected_key_points = [ideal_answer]
+
+        keyword_result = await loop.run_in_executor(
+            None,
+            lambda: extract_keywords(
+                transcript,
+                expected_keywords,
+                expected_key_points,
+            ),
+        )
+        audio_metrics = await loop.run_in_executor(
+            None,
+            lambda: analyze_audio(audio_path, transcript, stt_segments or []),
+        )
+        llm_result = await loop.run_in_executor(
+            None,
+            lambda: evaluate_content(
+                question_text=question_text or "",
+                transcript=transcript,
+                expected_keywords=expected_keywords,
+                expected_key_points=expected_key_points,
+                ideal_answer=ideal_answer,
+                keyword_result=keyword_result,
+            ),
+        )
+        try:
+            content_model_result = await loop.run_in_executor(
+                None,
+                lambda: evaluate_content_model(
+                    question=question_text or "",
+                    answer=transcript,
+                    reference=ideal_answer,
+                    expected_keywords=expected_keywords,
+                    expected_key_points=expected_key_points,
+                ),
+            )
+        except Exception as error:
+            logger.warning("Content model scoring failed: %s", error)
+            content_model_result = None
+
+        question = {
+            "id": response_id,
+            "question_text": question_text,
+            "content": question_text,
+            "expected_keywords": expected_keywords,
+            "expected_key_points": expected_key_points,
+            "ideal_answer": ideal_answer,
+        }
+        final_result = build_final_result(
+            question=question,
+            transcript=transcript,
+            keyword_result=keyword_result,
+            llm_result=llm_result,
+            audio_metrics=audio_metrics,
+            content_model_result=content_model_result,
+        )
+        result = _pipeline_to_legacy_analysis(response_id, final_result)
+        logger.info("Analysis complete. Overall score: %s", result["overallScore"])
+        return result
+    finally:
+        if downloaded_audio_path and os.path.exists(downloaded_audio_path):
+            os.unlink(downloaded_audio_path)

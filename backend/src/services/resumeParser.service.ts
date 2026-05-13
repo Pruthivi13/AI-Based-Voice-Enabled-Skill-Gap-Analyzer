@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
-import { PDFParse } from 'pdf-parse';
+import pdfParse from 'pdf-parse';
 
 const mlClient = axios.create({
   baseURL: env.ML_SERVICE_URL,
@@ -10,10 +10,8 @@ const mlClient = axios.create({
 
 export const extractTextFromPDF = async (buffer: Buffer): Promise<string> => {
   try {
-    const parser = new PDFParse({ data: new Uint8Array(buffer) });
-    const result = await parser.getText();
-    await parser.destroy();
-    return result.text;
+    const result = await pdfParse(buffer);
+    return result.text ?? '';
   } catch (err) {
     logger.error('PDF parsing failed:', err);
     throw new Error('Failed to extract text from PDF');

@@ -139,6 +139,10 @@ export const getSessionQuestions = async (
   });
   if (!session) throw new ApiError('NOT_FOUND', 'Session not found.', 404);
 
+  if (Array.isArray(session.questionsJson) && session.questionsJson.length > 0) {
+    return session.questionsJson as any[];
+  }
+
   const category =
     session.interviewType === 'TECHNICAL'
       ? 'TECHNICAL'

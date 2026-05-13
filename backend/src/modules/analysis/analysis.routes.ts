@@ -7,6 +7,7 @@ import {
   generateAnalysis,
 } from './analysis.controller';
 import { authMiddleware } from '../../middleware/auth.middleware';
+import { strictRateLimit } from '../../middleware/rateLimit.middleware';
 
 const router = Router();
 
@@ -25,6 +26,7 @@ router.get('/sessions/:id/review', authMiddleware, getSessionReview);
 router.post(
   '/sessions/:id/generate-analysis',
   authMiddleware,
+  strictRateLimit,
   generateAnalysis
 );
 

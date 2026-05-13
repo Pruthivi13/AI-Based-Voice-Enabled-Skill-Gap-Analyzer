@@ -8,15 +8,9 @@ from dotenv import load_dotenv
 from groq import Groq
 from utils.logger import setup_logger
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../../backend/.env'))
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../.env'))
 
 logger = setup_logger(__name__)
-
-api_key = os.getenv("GROQ_API_KEY")
-if not api_key:
-    raise ValueError("GROQ_API_KEY not found in environment")
-
-client = Groq(api_key=api_key)
 
 
 def generate_followup_questions(
@@ -74,6 +68,12 @@ Return ONLY a valid JSON array, no markdown, no explanation:
     models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
     raw = ""
 
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        logger.error("GROQ_API_KEY not found in environment")
+        return []
+    client = Groq(api_key=api_key)
+
     for model_name in models:
         try:
             logger.info(f"Trying model: {model_name}")
@@ -86,10 +86,11 @@ Return ONLY a valid JSON array, no markdown, no explanation:
                     },
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.4,
+                temperature=0,
+                seed=42,
                 max_tokens=600,
             )
-            raw = response.choices[0].message.content.strip()
+            raw = (response.choices[0].message.content or "").strip()
             logger.info(f"Success with model: {model_name}")
             break
         except Exception as err:

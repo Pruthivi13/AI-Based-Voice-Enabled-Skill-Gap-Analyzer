@@ -1,9 +1,15 @@
 import prisma from '../../config/prisma';
+import supabase from '../../config/supabase';
 import { ApiError } from '../../utils/apiError';
-import { analyzeResponse } from '../../services/mlClient.service';
+import {
+  analyzeAnswerPipeline,
+  analyzeResponse,
+} from '../../services/mlClient.service';
 import { logger } from '../../utils/logger';
 import { updateStreak } from '../../services/streak.service';
 import { captureSkillSnapshot } from '../../services/skillSnapshot.service';
+
+const SIGNED_AUDIO_URL_TTL_SECONDS = 86400;
 
 const getRatingLabel = (score: number): string => {
   if (score >= 9) return 'Excellent';
@@ -17,6 +23,145 @@ const avg = (arr: (number | null)[]): number => {
   return valid.length
     ? parseFloat((valid.reduce((a, b) => a + b, 0) / valid.length).toFixed(1))
     : 0;
+};
+
+const toStringArray = (value: any): string[] => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item)).filter(Boolean);
+  }
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => String(item)).filter(Boolean);
+      }
+    } catch {
+      return value
+        .split(/[,;\n|]/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+  }
+  return [];
+};
+
+const getFreshAudioUrl = async (upload: any): Promise<string | null> => {
+  if (!upload) return null;
+  if (!upload.storagePath) return upload.fileUrl ?? null;
+
+  const { data, error } = await supabase.storage
+    .from('audio-uploads')
+    .createSignedUrl(upload.storagePath, SIGNED_AUDIO_URL_TTL_SECONDS);
+
+  if (error) {
+    logger.warn(
+      `Could not refresh signed audio URL for upload ${upload.id}: ${error.message}`
+    );
+    return upload.fileUrl ?? null;
+  }
+
+  return data.signedUrl;
+};
+
+const scoringModeLabel = (llmProvider?: string | null, scorerBackend?: string | null) => {
+  if (llmProvider === 'heuristic_fallback' || scorerBackend === 'local_semantic') {
+    return 'heuristic mode';
+  }
+  if (scorerBackend === 'transformer') {
+    return 'AI model';
+  }
+  if (scorerBackend === 'skipped') {
+    return 'rubric only';
+  }
+  return llmProvider ? 'AI model' : null;
+};
+
+const bucketScore = (score: number | null | undefined, isHeuristic: boolean) => {
+  if (score == null) return null;
+  const numericScore = Number(score);
+  if (!Number.isFinite(numericScore)) return null;
+  if (!isHeuristic) return numericScore;
+  return Math.round(numericScore * 2) / 2;
+};
+
+const mapPipelineResultToAnalysis = (mlResult: any) => {
+  const content = mlResult?.content_scores ?? {};
+  const delivery = mlResult?.delivery_scores ?? {};
+  const audio = mlResult?.audio_metrics ?? {};
+  const llmProvider = mlResult?.llm_provider ?? mlResult?.llm_evaluation?.provider ?? null;
+  const scorerBackend =
+    mlResult?.scorer_backend ??
+    mlResult?.content_model_evaluation?.scorer_backend ??
+    null;
+  const scoringMode = scoringModeLabel(llmProvider, scorerBackend);
+  const isHeuristic =
+    llmProvider === 'heuristic_fallback' || scorerBackend === 'local_semantic';
+  const fluencyScore = bucketScore(delivery.fluency, isHeuristic);
+  const confidenceScore = bucketScore(delivery.confidence_cues, isHeuristic);
+  const pronunciationScore = bucketScore(
+    delivery.voice_quality ?? delivery.delivery,
+    isHeuristic
+  );
+  const hesitationControlScore = bucketScore(delivery.hesitation_control, isHeuristic);
+  const voiceQualityScore = bucketScore(delivery.voice_quality, isHeuristic);
+  const wordsPerMinute = Number(audio.words_per_minute);
+  const hasUsablePace =
+    Boolean(audio.audio_available) &&
+    Number.isFinite(wordsPerMinute) &&
+    wordsPerMinute > 0;
+  const improvements = Array.isArray(mlResult?.improvements)
+    ? mlResult.improvements
+    : [];
+  const metricFeedback = [];
+
+  if (audio.audio_available) {
+    if (hasUsablePace) {
+      metricFeedback.push(`Speaking speed: ${Math.round(wordsPerMinute)} WPM`);
+    }
+    if (audio.pause_count != null) {
+      metricFeedback.push(
+        `Pause analysis: ${audio.pause_count} pause(s), ${audio.long_pause_count ?? 0} long pause(s)`
+      );
+    }
+    if (audio.filler_count != null) {
+      metricFeedback.push(`Filler analysis: ${audio.filler_count} filler word(s) detected`);
+    }
+    if (hesitationControlScore != null) {
+      metricFeedback.push(`Hesitation control: ${hesitationControlScore.toFixed(1)}/10`);
+    }
+    if (voiceQualityScore != null) {
+      metricFeedback.push(`Voice quality/confidence cues: ${voiceQualityScore.toFixed(1)}/10`);
+    }
+  } else {
+    metricFeedback.push(
+      'Delivery timing needs recorded audio; transcript-only analysis cannot measure real pauses or voice quality.'
+    );
+  }
+
+  return {
+    clarityScore: content.clarity ?? null,
+    fluencyScore,
+    confidenceScore,
+    relevanceScore: content.relevance ?? null,
+    grammarScore: content.clarity ?? null,
+    pronunciationScore,
+    technicalScore:
+      content.correctness != null && content.completeness != null
+        ? parseFloat(((content.correctness + content.completeness) / 2).toFixed(1))
+        : content.correctness ?? null,
+    fillerWordCount: audio.filler_count ?? null,
+    speechRateWpm: hasUsablePace ? Math.round(wordsPerMinute) : null,
+    sentiment: mlResult?.label === 'STRONG' ? 'positive' : 'neutral',
+    overallScore: mlResult?.overall_score ?? null,
+    llmProvider,
+    scorerBackend,
+    feedbackJson: [
+      scoringMode ? `Scoring mode: ${scoringMode}` : null,
+      mlResult?.feedback,
+      ...improvements,
+      ...metricFeedback,
+    ].filter(Boolean),
+  };
 };
 
 export const getProcessingStatus = async (
@@ -120,6 +265,8 @@ export const getQuestionSummary = async (
           fillerWordCount: response.analysis.fillerWordCount,
           speechRateWpm: response.analysis.speechRateWpm,
           overallScore: response.analysis.overallScore,
+          llmProvider: response.analysis.llmProvider,
+          scorerBackend: response.analysis.scorerBackend,
           feedback: response.analysis.feedbackJson,
         }
       : null,
@@ -181,6 +328,12 @@ export const getSessionReview = async (userId: string, sessionId: string) => {
       transcript: r.transcript,
       notes: r.notes,
       score: r.analysis?.overallScore ?? null,
+      llmProvider: r.analysis?.llmProvider ?? null,
+      scorerBackend: r.analysis?.scorerBackend ?? null,
+      scoringMode: scoringModeLabel(
+        r.analysis?.llmProvider,
+        r.analysis?.scorerBackend
+      ),
       feedback: r.analysis?.feedbackJson ?? null,
     })),
   };
@@ -192,7 +345,18 @@ export const generateMockAnalysis = async (
 ) => {
   const session = await prisma.interviewSession.findFirst({
     where: { id: sessionId, userId },
-    include: { responses: true },
+    include: {
+      responses: {
+        include: {
+          question: true,
+          uploads: {
+            where: { type: 'AUDIO' },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+        },
+      },
+    },
   });
   if (!session) throw new ApiError('NOT_FOUND', 'Session not found.', 404);
 
@@ -209,32 +373,70 @@ export const generateMockAnalysis = async (
       speechRateWpm: 130,
       sentiment: 'positive',
       overallScore: 7.4,
+      llmProvider: null,
+      scorerBackend: 'fallback_mock',
       feedbackJson: [
+        'Fallback analysis: ML services unavailable; these scores are provisional.',
         'Good structure',
         'Add more examples',
         'Reduce filler words',
       ],
     };
 
-    // Use real ML if transcript exists
-    if (response.transcript) {
-      logger.info(`Using ML analysis for response: ${response.id}`);
-      const mlResult = await analyzeResponse(response.id, response.transcript);
-      if (mlResult) {
-        analysisData = {
-          clarityScore: mlResult.clarityScore,
-          fluencyScore: mlResult.fluencyScore,
-          confidenceScore: mlResult.confidenceScore,
-          relevanceScore: mlResult.relevanceScore,
-          grammarScore: mlResult.grammarScore,
-          pronunciationScore: mlResult.pronunciationScore,
-          technicalScore: mlResult.technicalScore,
-          fillerWordCount: mlResult.fillerWordCount,
-          speechRateWpm: mlResult.speechRateWpm,
-          sentiment: mlResult.sentiment,
-          overallScore: mlResult.overallScore,
-          feedbackJson: mlResult.feedbackJson,
-        };
+    const audioUrl = await getFreshAudioUrl(response.uploads?.[0] ?? null);
+
+    // Use real ML when either a transcript or the original audio is available.
+    if (response.transcript || audioUrl) {
+      logger.info(`Using new evaluator pipeline for response: ${response.id}`);
+      const expectedKeywords = toStringArray(response.question.expectedKeywords);
+      const referenceAnswer = response.question.referenceAnswer || '';
+      const expectedKeyPoints = referenceAnswer ? [referenceAnswer] : [];
+
+      const pipelineResult = await analyzeAnswerPipeline({
+        responseId: response.id,
+        userId,
+        questionId: response.questionId,
+        questionText: response.question.content,
+        transcript: response.transcript || '',
+        audioUrl,
+        expectedKeywords,
+        expectedKeyPoints,
+        idealAnswer: referenceAnswer,
+      });
+
+      if (pipelineResult) {
+        analysisData = mapPipelineResultToAnalysis(pipelineResult);
+      } else {
+        logger.warn(`New evaluator failed, falling back to transcript analyzer for response: ${response.id}`);
+        const mlResult = await analyzeResponse(response.id, response.transcript || '', {
+          questionText: response.question.content,
+          audioUrl,
+          expectedKeywords,
+          expectedKeyPoints,
+          idealAnswer: referenceAnswer,
+        });
+        if (mlResult) {
+          analysisData = {
+            clarityScore: mlResult.clarityScore,
+            fluencyScore: mlResult.fluencyScore,
+            confidenceScore: mlResult.confidenceScore,
+            relevanceScore: mlResult.relevanceScore,
+            grammarScore: mlResult.grammarScore,
+            pronunciationScore: mlResult.pronunciationScore,
+            technicalScore: mlResult.technicalScore,
+            fillerWordCount: mlResult.fillerWordCount,
+            speechRateWpm: mlResult.speechRateWpm,
+            sentiment: mlResult.sentiment,
+            overallScore: mlResult.overallScore,
+            llmProvider: mlResult.llmProvider ?? null,
+            scorerBackend: mlResult.scorerBackend ?? null,
+            feedbackJson: mlResult.feedbackJson,
+          };
+        } else {
+          logger.warn(
+            `Both ML analyzers failed for response ${response.id}; using fallback analysis scores`
+          );
+        }
       }
     }
 

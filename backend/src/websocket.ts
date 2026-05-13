@@ -2,6 +2,14 @@ import { WebSocketServer } from 'ws';
 import WebSocket from 'ws';
 import { Server } from 'http';
 import { logger } from './utils/logger';
+import admin from './config/firebaseAdmin';
+
+const unauthorized = (socket: any) => {
+  try {
+    socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+  } catch {}
+  socket.destroy();
+};
 
 export function setupWebSocket(server: Server) {
   // No path filter — handle all WebSocket upgrades manually
@@ -9,23 +17,42 @@ export function setupWebSocket(server: Server) {
 
   // Intercept HTTP upgrade requests
   server.on('upgrade', (req, socket, head) => {
-    if (req.url?.startsWith('/ws/transcribe/')) {
+    void (async () => {
+      const url = new URL(req.url || '', 'http://localhost');
+      if (!url.pathname.startsWith('/ws/transcribe/')) {
+        socket.destroy();
+        return;
+      }
+
+      const token = url.searchParams.get('token');
+      if (!token) {
+        unauthorized(socket);
+        return;
+      }
+
+      try {
+        await admin.auth().verifyIdToken(token);
+      } catch (err) {
+        logger.warn('Rejected unauthenticated WebSocket upgrade:', err);
+        unauthorized(socket);
+        return;
+      }
+
       wss.handleUpgrade(req, socket, head, (clientWs) => {
         wss.emit('connection', clientWs, req);
       });
-    } else {
-      socket.destroy();
-    }
+    })();
   });
 
   wss.on('connection', (clientWs, req) => {
-    const responseId = req.url?.split('/').pop();
+    const url = new URL(req.url || '', 'http://localhost');
+    const responseId = url.pathname.split('/').pop();
     logger.info(`WebSocket proxy connected for response: ${responseId}`);
 
     let mlWs: WebSocket;
     try {
       mlWs = new WebSocket(
-        `ws://localhost:8000/ws/transcribe/${responseId}`
+        `ws://localhost:8000/ws/transcribe/${encodeURIComponent(responseId || '')}`
       );
     } catch (err) {
       logger.error('Failed to connect to ML WebSocket:', err);

@@ -4,10 +4,9 @@ from dotenv import load_dotenv
 from groq import Groq
 from utils.logger import setup_logger
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../../backend/.env'))
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../.env'))
 
 logger = setup_logger(__name__)
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # roadmap.sh style: LEFT-TO-RIGHT flow
@@ -45,6 +44,7 @@ def _infer_edge_type(src_type: str, tgt_type: str) -> str:
 
 def generate_roadmap(target_role: str, weak_skills: list) -> dict:
     logger.info(f"Generating roadmap.sh style roadmap for: {target_role}")
+    client = Groq(api_key=os.getenv("GROQ_API_KEY"))
     weak_skills_str = ", ".join(weak_skills) if weak_skills else "none"
 
     prompt = f"""
@@ -129,7 +129,8 @@ Return ONLY valid JSON. No explanation.
                     {"role": "system", "content": "You generate detailed roadmap.sh style learning roadmaps as JSON. Return only a valid JSON object. No markdown, no explanation."},
                     {"role": "user",   "content": prompt},
                 ],
-                temperature=0.3,
+                temperature=0,
+                seed=42,
                 max_tokens=6000,
                 response_format={"type": "json_object"},
             )
@@ -143,7 +144,7 @@ Return ONLY valid JSON. No explanation.
         return _build_fallback_roadmap(target_role, weak_skills)
 
     try:
-        raw = response.choices[0].message.content.strip()
+        raw = (response.choices[0].message.content or "").strip()
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:
@@ -355,6 +356,7 @@ def _build_fallback_roadmap(target_role: str, weak_skills: list) -> dict:
 
 def generate_node_info(skill_label: str, target_role: str) -> dict:
     logger.info(f"Node info: {skill_label}")
+    client = Groq(api_key=os.getenv("GROQ_API_KEY"))
     prompt = f"""Generate detailed learning info for "{skill_label}" for a "{target_role}".
 Return JSON: description (3-4 sentences), whatYouWillLearn (4 bullet strings),
 resources (3-4 items: {{type, title, url, free}}), timeToLearn, difficulty, prerequisites (array).
@@ -368,10 +370,10 @@ Return ONLY valid JSON."""
                     {"role": "system", "content": "Return only valid JSON."},
                     {"role": "user",   "content": prompt},
                 ],
-                temperature=0.3, max_tokens=1000,
+                temperature=0, seed=42, max_tokens=1000,
                 response_format={"type": "json_object"},
             )
-            return json.loads(r.choices[0].message.content.strip())
+            return json.loads((r.choices[0].message.content or "").strip())
         except Exception as err:
             logger.warning(f"Node info {model_name} failed: {err}")
     raise Exception("All models failed for node info")

@@ -53,6 +53,7 @@ app.get('/health/db', async (req, res) => {
 });
 
 app.use('/api', userRoutes);
+app.use('/api', scheduleRoutes);
 app.use('/api', sessionRoutes);
 app.use('/api', uploadRoutes);
 app.use('/api', analysisRoutes);
@@ -63,7 +64,6 @@ app.use('/api', resourcesRoutes);
 app.use('/api', questionRoutes);
 app.use('/api', reportsRoutes);
 app.use('/api', followupRoutes);
-app.use('/api', scheduleRoutes);
 app.use('/api', bookmarksRoutes);
 app.use('/api', notesRoutes);
 app.use('/api', warmupRoutes);

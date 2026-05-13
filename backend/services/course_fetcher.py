@@ -13,13 +13,15 @@ from typing import Optional
 from dotenv import load_dotenv
 from utils.logger import setup_logger
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../backend/.env"))
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../.env"))
 
 logger = setup_logger(__name__)
 
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 SERPER_URL = "https://google.serper.dev/search"
 SERPER_IMAGES_URL = "https://google.serper.dev/images"
+_thumbnail_failures = 0
+_MAX_THUMBNAIL_FAILURES = 3
 
 # Platforms to search — prioritised
 PLATFORMS = [
@@ -88,22 +90,23 @@ def _extract_students(snippet: str) -> Optional[str]:
 
 def _fetch_thumbnail(title: str, platform: str) -> str:
     """Fetch a landscape thumbnail for the course."""
-    if not SERPER_API_KEY or not title:
+    global _thumbnail_failures
+
+    if not SERPER_API_KEY or not title or _thumbnail_failures >= _MAX_THUMBNAIL_FAILURES:
         return ""
     
     query = f"{title} {platform} course"
-    payload = json.dumps({
+    body = {
         "q": query,
         "num": 5
-    })
+    }
     headers = {
-        "X-API-KEY": SERPER_API_KEY,
-        "Content-Type": "application/json",
+        "X-API-KEY": SERPER_API_KEY or "",
     }
     
     try:
-        with httpx.Client(timeout=10) as client:
-            resp = client.post(SERPER_IMAGES_URL, data=payload, headers=headers)
+        with httpx.Client(timeout=10) as http_client:
+            resp = http_client.post(SERPER_IMAGES_URL, json=body, headers=headers)
             resp.raise_for_status()
             data = resp.json()
             
@@ -122,7 +125,11 @@ def _fetch_thumbnail(title: str, platform: str) -> str:
             if images:
                 return images[0].get("imageUrl", "")
     except Exception as e:
-        logger.warning(f"Thumbnail fetch failed for '{title}': {e}")
+        _thumbnail_failures += 1
+        logger.warning(
+            f"Thumbnail fetch failed ({_thumbnail_failures}/{_MAX_THUMBNAIL_FAILURES}) "
+            f"for '{title}': {e}"
+        )
         
     return ""
 
@@ -130,20 +137,19 @@ def _fetch_thumbnail(title: str, platform: str) -> str:
 def _search_platform(role: str, platform_name: str, site_filter: str) -> list[dict]:
     """Run a single Serper search for one platform."""
     query = f"{role} course {site_filter}"
-    payload = json.dumps({
+    body = {
         "q": query,
         "num": 4,
         "gl": "us",
         "hl": "en",
-    })
+    }
     headers = {
-        "X-API-KEY": SERPER_API_KEY,
-        "Content-Type": "application/json",
+        "X-API-KEY": SERPER_API_KEY or "",
     }
 
     try:
-        with httpx.Client(timeout=10) as client:
-            resp = client.post(SERPER_URL, data=payload, headers=headers)
+        with httpx.Client(timeout=10) as http_client:
+            resp = http_client.post(SERPER_URL, json=body, headers=headers)
             resp.raise_for_status()
             data = resp.json()
     except Exception as e:

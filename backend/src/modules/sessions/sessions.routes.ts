@@ -32,6 +32,7 @@ const upload = multer({
 router.post(
   '/sessions/with-resume',
   authMiddleware,
+  strictRateLimit,
   upload.single('resume'),
   createSessionWithResume
 );

@@ -168,5 +168,13 @@ models/
 data/
 *.csv
 *.safetensors
+!data/
+!data/questions.json
+backend/uploads/
+backend/storage/
 
 tests/
+!tests/
+!tests/*.py
+!tests/*.sh
+!tests/*.js

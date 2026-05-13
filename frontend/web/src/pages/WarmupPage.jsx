@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import WarmupBreathingRing from '../components/WarmupBreathingRing';
 import WarmupReadyMeter from '../components/WarmupReadyMeter';
-import { fetchWarmupQuestion } from '../services/api';
+import { fetchWarmupQuestion, getToken } from '../services/api';
 
 const PHASES = [
   { id: 'intro',   label: 'Get Ready',     icon: Sparkles,     color: '#a78bfa' },
@@ -108,7 +108,11 @@ export default function WarmupPage() {
 
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
       const wsUrl = API_URL.replace('http', 'ws');
-      const ws = new WebSocket(`${wsUrl}/ws/transcribe/warmup-${Date.now()}`);
+      const token = await getToken();
+      if (!token) throw new Error('Missing auth token');
+      const ws = new WebSocket(
+        `${wsUrl}/ws/transcribe/warmup-${crypto.randomUUID()}?token=${encodeURIComponent(token)}`
+      );
       wsRef.current = ws;
 
       ws.onmessage = async (event) => {

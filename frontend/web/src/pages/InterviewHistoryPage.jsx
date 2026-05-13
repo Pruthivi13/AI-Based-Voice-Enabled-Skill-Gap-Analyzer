@@ -108,12 +108,12 @@ export default function InterviewHistoryPage() {
                 </div>
                 <div className="text-right flex-shrink-0">
                   <span className="text-2xl font-extrabold text-primary-500">
-                    {session.overallScore ?? 'N/A'}
+                    {session.overallScore != null ? session.overallScore : session.status === 'COMPLETED' ? 'N/A' : '—'}
                   </span>
                   <p
                     className={`text-[10px] uppercase tracking-wider font-bold ${isDark ? 'text-white/40' : 'text-ink-500'}`}
                   >
-                    Score
+                    {session.overallScore != null ? 'Score' : session.status === 'COMPLETED' ? 'Score' : 'Pending'}
                   </p>
                 </div>
               </div>

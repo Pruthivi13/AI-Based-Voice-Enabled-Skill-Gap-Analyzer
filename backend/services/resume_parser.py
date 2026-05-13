@@ -4,12 +4,9 @@ from dotenv import load_dotenv
 from groq import Groq
 from utils.logger import setup_logger
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../../backend/.env'))
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../.env'))
 
 logger = setup_logger(__name__)
-
-api_key = os.getenv("GROQ_API_KEY")
-client = Groq(api_key=api_key)
 
 def generate_questions_from_resume(
     resume_text: str,
@@ -19,6 +16,10 @@ def generate_questions_from_resume(
     question_count: int = 5
 ) -> list:
     logger.info(f"Generating resume-tailored questions for {target_role}")
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise ValueError("GROQ_API_KEY not found in environment")
+    client = Groq(api_key=api_key)
 
     prompt = f"""
 You are an expert interviewer. You have been given a candidate's resume and must generate highly personalized interview questions based on their actual experience.
@@ -72,7 +73,8 @@ Return ONLY a valid JSON array, no explanation, no markdown:
                     "content": prompt
                 }
             ],
-            temperature=0.7,
+            temperature=0,
+            seed=42,
             max_tokens=1500,
         )
 

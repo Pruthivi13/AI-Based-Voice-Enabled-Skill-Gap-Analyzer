@@ -6,16 +6,9 @@ from groq import Groq
 from utils.logger import setup_logger
 
 # Load env with explicit path
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../../backend/.env'))
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../.env'))
 
 logger = setup_logger(__name__)
-
-# Init client
-api_key = os.getenv("GROQ_API_KEY")
-if not api_key:
-    raise ValueError("GROQ_API_KEY not found in environment")
-
-client = Groq(api_key=api_key)
 
 
 def generate_questions(
@@ -68,6 +61,11 @@ Return ONLY a valid JSON array:
         "gemma2-9b-it",
     ]
 
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise ValueError("GROQ_API_KEY not found in environment")
+    client = Groq(api_key=api_key)
+
     raw = ""
     try:
         response = None
@@ -87,7 +85,8 @@ Return ONLY a valid JSON array:
                             "content": prompt
                         }
                     ],
-                    temperature=0.3,
+                    temperature=0,
+                    seed=42,
                     max_tokens=1000,
                 )
                 logger.info(f"Success with model: {model_name}")
@@ -100,7 +99,7 @@ Return ONLY a valid JSON array:
         if response is None:
             raise last_error or Exception("All models failed")
 
-        raw = response.choices[0].message.content.strip()
+        raw = (response.choices[0].message.content or "").strip()
 
         # Extract JSON safely (handles garbage text)
         match = re.search(r'\[.*\]', raw, re.DOTALL)

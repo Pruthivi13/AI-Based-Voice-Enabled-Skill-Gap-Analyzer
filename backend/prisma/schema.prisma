@@ -191,6 +191,7 @@ model Response {
   question        Question         @relation(fields: [questionId], references: [id], onDelete: Restrict)
   analysis        ResponseAnalysis?
   uploads         Upload[]
+  followupQuestions FollowupQuestion[]
 
   @@unique([sessionId, questionId])
   @@index([sessionId])
@@ -211,11 +212,26 @@ model ResponseAnalysis {
   speechRateWpm      Int?
   sentiment          String?
   overallScore       Float?
+  llmProvider        String?
+  scorerBackend      String?
   feedbackJson       Json?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   response           Response @relation(fields: [responseId], references: [id], onDelete: Cascade)
+}
+
+model FollowupQuestion {
+  id         String   @id @default(cuid())
+  responseId String
+  question   String
+  reason     String?
+  topic      String?
+  createdAt  DateTime @default(now())
+
+  response   Response @relation(fields: [responseId], references: [id], onDelete: Cascade)
+
+  @@index([responseId])
 }
 
 model Report {

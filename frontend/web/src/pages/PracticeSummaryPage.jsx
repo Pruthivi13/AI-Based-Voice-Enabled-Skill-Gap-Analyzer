@@ -26,21 +26,40 @@ export default function PracticeSummaryPage() {
     }
 
     const loadSummary = async () => {
+      // Fire generateAnalysis but don't let its failure block us —
+      // the AIProcessingPage already completed one pass, so data
+      // may already exist in the DB.
       try {
-        // Generate analysis first
         await generateAnalysis(sessionId);
+      } catch (err) {
+        console.warn('generateAnalysis call failed (may already be done):', err);
+      }
 
-        // Wait for transcription to complete (Whisper takes time)
+      // Poll for the summary data (transcript + analysis).
+      // Wait for both transcript AND analysis to be present before
+      // declaring success, so the Quick Score is never N/A.
+      try {
         let summaryData = null;
         let attempts = 0;
-        const maxAttempts = 10;
+        const maxAttempts = 15;
 
         while (attempts < maxAttempts) {
-          const data = await fetchPracticeSummary(sessionId, firstQuestion.id);
+          try {
+            const data = await fetchPracticeSummary(sessionId, firstQuestion.id);
 
-          if (data?.transcript) {
-            summaryData = data;
-            break;
+            if (data?.transcript && data?.analysis?.overallScore != null) {
+              summaryData = data;
+              break;
+            }
+
+            // Accept transcript-only after enough retries so we
+            // at least show *something* even if scoring is slow.
+            if (attempts >= 8 && data?.transcript) {
+              summaryData = data;
+              break;
+            }
+          } catch (pollErr) {
+            console.warn(`Poll attempt ${attempts + 1} failed:`, pollErr);
           }
 
           attempts++;
@@ -79,15 +98,21 @@ export default function PracticeSummaryPage() {
           Quick Score
         </p>
         <p className="text-5xl font-extrabold text-primary-500">
-          {summary?.analysis?.overallScore ?? 'N/A'}
+          {summary?.analysis?.overallScore != null
+            ? summary.analysis.overallScore
+            : '—'}
         </p>
-        <p className="text-sm text-white/50 mt-1">out of 10</p>
+        <p className="text-sm text-white/50 mt-1">
+          {summary?.analysis?.overallScore != null
+            ? 'out of 10'
+            : 'Score unavailable — try viewing from History'}
+        </p>
       </GlassPanel>
 
       {/* Transcript */}
       <div className="w-full mb-6">
         <TranscriptPanel
-          transcript={summary?.transcript || 'No transcript available yet.'}
+          transcript={summary?.transcript || 'Transcript not available. Check your session in History for the full review.'}
           label="Your Answer"
           dark
         />
@@ -153,6 +178,30 @@ export default function PracticeSummaryPage() {
                   Technical:{' '}
                   <span className="text-primary-400 font-bold">
                     {summary.analysis.technicalScore}/10
+                  </span>
+                </p>
+              )}
+              {summary.analysis.pronunciationScore != null && (
+                <p>
+                  Voice Quality:{' '}
+                  <span className="text-primary-400 font-bold">
+                    {summary.analysis.pronunciationScore}/10
+                  </span>
+                </p>
+              )}
+              {summary.analysis.speechRateWpm != null && (
+                <p>
+                  Pace:{' '}
+                  <span className="text-primary-400 font-bold">
+                    {summary.analysis.speechRateWpm} WPM
+                  </span>
+                </p>
+              )}
+              {summary.analysis.fillerWordCount != null && (
+                <p>
+                  Fillers:{' '}
+                  <span className="text-primary-400 font-bold">
+                    {summary.analysis.fillerWordCount}
                   </span>
                 </p>
               )}
