@@ -224,7 +224,11 @@ export default function LiveInterviewPage() {
       wsRef.current?.close();
     }
     saveProgressToStorage(currentIndexRef.current);
-    try { await pauseSession(sessionId); } catch {}
+    try {
+      await pauseSession(sessionId);
+    } catch (err) {
+      console.warn('Could not mark session paused in DB:', err);
+    }
     setShowPauseConfirm(false);
     navigate('/dashboard');
   }, [isRecording, sessionId, stopTimer, navigate]);

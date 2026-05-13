@@ -20,6 +20,8 @@ logger = setup_logger(__name__)
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 SERPER_URL = "https://google.serper.dev/search"
 SERPER_IMAGES_URL = "https://google.serper.dev/images"
+_thumbnail_failures = 0
+_MAX_THUMBNAIL_FAILURES = 3
 
 # Platforms to search — prioritised
 PLATFORMS = [
@@ -88,7 +90,9 @@ def _extract_students(snippet: str) -> Optional[str]:
 
 def _fetch_thumbnail(title: str, platform: str) -> str:
     """Fetch a landscape thumbnail for the course."""
-    if not SERPER_API_KEY or not title:
+    global _thumbnail_failures
+
+    if not SERPER_API_KEY or not title or _thumbnail_failures >= _MAX_THUMBNAIL_FAILURES:
         return ""
     
     query = f"{title} {platform} course"
@@ -121,7 +125,11 @@ def _fetch_thumbnail(title: str, platform: str) -> str:
             if images:
                 return images[0].get("imageUrl", "")
     except Exception as e:
-        logger.warning(f"Thumbnail fetch failed for '{title}': {e}")
+        _thumbnail_failures += 1
+        logger.warning(
+            f"Thumbnail fetch failed ({_thumbnail_failures}/{_MAX_THUMBNAIL_FAILURES}) "
+            f"for '{title}': {e}"
+        )
         
     return ""
 

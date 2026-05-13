@@ -105,22 +105,20 @@ export async function enqueueSessionJobs(opts: {
   const ids: { activateId?: string; reminderId?: string } = {};
 
   // Activation job — fires exactly at scheduledAt
-  const activateId = await boss.sendAfter(
+  const activateId = await boss.send(
     'activate-session',
     { sessionId, userId },
-    {},
-    scheduledAt
+    { startAfter: scheduledAt }
   );
   if (activateId) ids.activateId = activateId;
 
   // Reminder job — fires 15 minutes before (only if there's enough lead time)
   const reminderAt = new Date(scheduledAt.getTime() - 15 * 60 * 1000);
   if (reminderAt > now) {
-    const reminderId = await boss.sendAfter(
+    const reminderId = await boss.send(
       'send-reminder',
       { email: userEmail, sessionTitle: title, scheduledAt: scheduledAt.toISOString() },
-      {},
-      reminderAt
+      { startAfter: reminderAt }
     );
     if (reminderId) ids.reminderId = reminderId;
   }
