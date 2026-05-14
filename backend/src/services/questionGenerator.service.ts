@@ -14,18 +14,25 @@ export const generateQuestionsFromAI = async (
   questionCount: number
 ) => {
   try {
-    const { data } = await mlClient.post('/internal/generate-questions', {
-      targetRole,
-      experienceLevel,
-      interviewType,
-      questionCount,
-    });
+    const { data } = await mlClient.post(
+      '/internal/generate-questions',
+      {
+        targetRole,
+        experienceLevel,
+        interviewType,
+        questionCount,
+        _ts: Date.now(), // cache-buster — forces fresh generation every call
+      },
+      {
+        timeout: 60000, // increase to 60s to allow retries in Python
+      }
+    );
     logger.info(
       `Generated ${data.questions.length} questions for ${targetRole}`
     );
     return data.questions;
   } catch (err) {
-    logger.error('Question generation failed:', err);
-    throw new Error('Failed to generate questions');
+    logger.error(`Question generation failed for role "${targetRole}":`, err);
+    throw new Error(`Failed to generate questions for "${targetRole}"`);
   }
 };

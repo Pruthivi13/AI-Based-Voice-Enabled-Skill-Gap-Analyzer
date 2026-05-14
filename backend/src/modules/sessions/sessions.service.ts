@@ -37,6 +37,22 @@ export const createSession = async (userId: string, data: any) => {
             ? 'COMMUNICATION'
             : undefined;
 
+    const totalAvailable = await prisma.question.count({
+      where: {
+        isActive: true,
+        OR: [
+          { adjustedDifficulty: difficulty },
+          { difficulty, adjustedDifficulty: null }
+        ],
+        ...(category && { category }),
+        role: targetRole,
+      },
+    });
+
+    const randomSkip = totalAvailable > questionCount
+      ? Math.floor(Math.random() * (totalAvailable - questionCount))
+      : 0;
+
     questions = await prisma.question.findMany({
       where: {
         isActive: true,
@@ -45,9 +61,46 @@ export const createSession = async (userId: string, data: any) => {
           { difficulty, adjustedDifficulty: null }
         ],
         ...(category && { category }),
+        role: targetRole,
       },
       take: questionCount,
+      skip: randomSkip,
+      orderBy: { createdAt: 'asc' },
     });
+
+    // If no role-specific questions found, fall back to generic
+    if (!questions || questions.length === 0) {
+      const genericTotal = await prisma.question.count({
+        where: {
+          isActive: true,
+          OR: [
+            { adjustedDifficulty: difficulty },
+            { difficulty, adjustedDifficulty: null }
+          ],
+          ...(category && { category }),
+          role: null,
+        },
+      });
+
+      const genericSkip = genericTotal > questionCount
+        ? Math.floor(Math.random() * (genericTotal - questionCount))
+        : 0;
+
+      questions = await prisma.question.findMany({
+        where: {
+          isActive: true,
+          OR: [
+            { adjustedDifficulty: difficulty },
+            { difficulty, adjustedDifficulty: null }
+          ],
+          ...(category && { category }),
+          role: null,
+        },
+        take: questionCount,
+        skip: genericSkip,
+        orderBy: { createdAt: 'asc' },
+      });
+    }
   }
 
   // ❌ No questions at all
@@ -147,7 +200,14 @@ export const getSessionQuestions = async (
   });
   if (!session) throw new ApiError('NOT_FOUND', 'Session not found.', 404);
 
-  if (Array.isArray(session.questionsJson) && session.questionsJson.length > 0) {
+  if (
+    Array.isArray(session.questionsJson) &&
+    session.questionsJson.length > 0 &&
+    (session.status === 'IN_PROGRESS' ||
+      session.status === 'PAUSED' ||
+      session.status === 'PROCESSING' ||
+      session.status === 'COMPLETED')
+  ) {
     return session.questionsJson as any[];
   }
 
@@ -160,7 +220,7 @@ export const getSessionQuestions = async (
           ? 'COMMUNICATION'
           : undefined;
 
-  const questions = await prisma.question.findMany({
+  let questions = await prisma.question.findMany({
     where: {
       isActive: true,
       OR: [
@@ -168,6 +228,7 @@ export const getSessionQuestions = async (
         { difficulty: session.difficulty, adjustedDifficulty: null }
       ],
       ...(category && { category }),
+      role: session.targetRole,
     },
     take: session.questionCount,
     select: {
@@ -179,6 +240,29 @@ export const getSessionQuestions = async (
       hints: true,
     },
   });
+
+  if (!questions || questions.length === 0) {
+    questions = await prisma.question.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { adjustedDifficulty: session.difficulty },
+          { difficulty: session.difficulty, adjustedDifficulty: null }
+        ],
+        ...(category && { category }),
+        role: null,
+      },
+      take: session.questionCount,
+      select: {
+        id: true,
+        content: true,
+        category: true,
+        difficulty: true,
+        timeLimitSeconds: true,
+        hints: true,
+      },
+    });
+  }
 
   return questions;
 };
