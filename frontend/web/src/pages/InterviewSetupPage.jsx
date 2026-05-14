@@ -86,7 +86,7 @@ export default function InterviewSetupPage() {
       const data = await resumeSession(pausedSession.id);
       sessionStorage.setItem('currentSessionId', data.sessionId);
       sessionStorage.setItem('currentQuestions', JSON.stringify(data.questions));
-      // resumeFromIndex is already in sessionStorage from before
+      sessionStorage.setItem('resumeFromIndex', String(data.resumeFromIndex));
       navigate('/interview');
     } catch (err) {
       setError('Could not resume session. It may have expired.');
@@ -130,6 +130,7 @@ export default function InterviewSetupPage() {
 
       sessionStorage.setItem('currentSessionId', result.sessionId);
       sessionStorage.setItem('currentQuestions', JSON.stringify(result.questions));
+      sessionStorage.removeItem('resumeFromIndex');
       if (warmupEnabled) {
         navigate('/warmup');
       } else {

@@ -13,6 +13,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchSessionReview, fetchSessionRoadmap, fetchFeedbackStats } from '../services/api';
 import RoadmapSection from '../components/RoadmapSection';
+import RoadmapErrorBoundary from '../components/RoadmapErrorBoundary';
 import CourseRecommendations from '../components/CourseRecommendations';
 import StatusChip from '../components/StatusChip';
 import LoadingState from '../components/LoadingState';
@@ -262,12 +263,14 @@ export default function SessionReviewPage() {
       {!roadmapLoading && roadmap && (
         <section className="mt-10">
           <h2 className="mb-4">Learning Roadmap</h2>
-          <RoadmapSection
-            nodes={roadmap.nodes}
-            edges={roadmap.edges}
-            targetRole={roadmap.targetRole}
-            roadmapId={`${roadmap.targetRole}-${id}`.replace(/\s+/g, '-').toLowerCase()}
-          />
+          <RoadmapErrorBoundary>
+            <RoadmapSection
+              nodes={roadmap.nodes}
+              edges={roadmap.edges}
+              targetRole={roadmap.targetRole}
+              roadmapId={`${roadmap.targetRole}-${id}`.replace(/\s+/g, '-').toLowerCase()}
+            />
+          </RoadmapErrorBoundary>
         </section>
       )}
 

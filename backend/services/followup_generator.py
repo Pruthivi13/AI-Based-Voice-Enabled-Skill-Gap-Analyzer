@@ -43,7 +43,7 @@ The candidate was asked:
 "{original_question}"
 
 The candidate responded:
-"{transcript[:1500]}"
+"{transcript[:3000]}"
 
 Analyze their answer and generate exactly {count} targeted follow-up question(s).
 

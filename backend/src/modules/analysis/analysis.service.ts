@@ -8,6 +8,7 @@ import {
 import { logger } from '../../utils/logger';
 import { updateStreak } from '../../services/streak.service';
 import { captureSkillSnapshot } from '../../services/skillSnapshot.service';
+import { buildEvaluationRubric } from '../../utils/questionRubric';
 
 const SIGNED_AUDIO_URL_TTL_SECONDS = 86400;
 
@@ -339,7 +340,7 @@ export const getSessionReview = async (userId: string, sessionId: string) => {
   };
 };
 
-export const generateMockAnalysis = async (
+export const generateSessionAnalysis = async (
   userId: string,
   sessionId: string
 ) => {
@@ -388,9 +389,8 @@ export const generateMockAnalysis = async (
     // Use real ML when either a transcript or the original audio is available.
     if (response.transcript || audioUrl) {
       logger.info(`Using new evaluator pipeline for response: ${response.id}`);
-      const expectedKeywords = toStringArray(response.question.expectedKeywords);
-      const referenceAnswer = response.question.referenceAnswer || '';
-      const expectedKeyPoints = referenceAnswer ? [referenceAnswer] : [];
+      const { expectedKeywords, expectedKeyPoints, referenceAnswer } =
+        buildEvaluationRubric(response.question, session.targetRole);
 
       const pipelineResult = await analyzeAnswerPipeline({
         responseId: response.id,

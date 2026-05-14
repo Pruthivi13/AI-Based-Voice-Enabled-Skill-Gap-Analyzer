@@ -2,6 +2,7 @@ import prisma from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
 import { generateQuestionsFromAI } from '../../services/questionGenerator.service';
 import { logger } from '../../utils/logger';
+import { buildStoredQuestionRubric } from '../../utils/questionRubric';
 
 export const createSession = async (userId: string, data: any) => {
   const {
@@ -57,10 +58,14 @@ export const createSession = async (userId: string, data: any) => {
   // Save AI-generated questions to the DB so transcript saves don't fail Foreign Key constraints
   const savedQuestions = await Promise.all(
     questions.map(async (q: any) => {
+      const rubric = buildStoredQuestionRubric(q);
       return prisma.question.upsert({
         where: { id: q.id },
         update: {
-          hints: q.hints || null,
+          hints: rubric.hints,
+          expectedKeywords: rubric.expectedKeywords,
+          referenceAnswer: rubric.referenceAnswer,
+          ...(rubric.role ? { role: rubric.role } : {}),
         },
         create: {
           id: q.id,
@@ -68,7 +73,10 @@ export const createSession = async (userId: string, data: any) => {
           category: (q.category || interviewType) as any,
           difficulty: (q.difficulty || difficulty) as any,
           timeLimitSeconds: q.timeLimitSeconds || 120,
-          hints: q.hints || null,
+          hints: rubric.hints,
+          expectedKeywords: rubric.expectedKeywords,
+          referenceAnswer: rubric.referenceAnswer,
+          ...(rubric.role ? { role: rubric.role } : {}),
           isActive: true,
         },
       });

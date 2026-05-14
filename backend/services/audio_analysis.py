@@ -634,8 +634,12 @@ def _parselmouth_voice_metrics(wav_path: str) -> dict[str, float]:
 
 def _word_timing_metrics(segments: list[dict[str, Any]] | None) -> dict[str, Any]:
     words: list[dict[str, Any]] = []
+    missing_word_timestamps = False
     for segment in segments or []:
-        for word in segment.get("words", []) or []:
+        segment_words = segment.get("words", []) or []
+        if not segment_words and str(segment.get("text", "")).strip():
+            missing_word_timestamps = True
+        for word in segment_words:
             start = float(word.get("start", 0.0))
             end = float(word.get("end", start))
             text = str(word.get("word", "")).strip()
@@ -652,6 +656,10 @@ def _word_timing_metrics(segments: list[dict[str, Any]] | None) -> dict[str, Any
 
     words.sort(key=lambda item: item["start"])
     if not words:
+        if missing_word_timestamps:
+            logger.debug(
+                "Segments missing word-level timestamps; delivery metrics will be estimate-only"
+            )
         return {
             "word_timestamps_available": False,
             "timed_word_count": 0,

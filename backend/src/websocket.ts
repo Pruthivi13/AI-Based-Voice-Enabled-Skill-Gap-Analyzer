@@ -1,8 +1,11 @@
 import { WebSocketServer } from 'ws';
 import WebSocket from 'ws';
 import { Server } from 'http';
+import { env } from './config/env';
 import { logger } from './utils/logger';
 import admin from './config/firebaseAdmin';
+
+const mlWsBaseUrl = env.ML_SERVICE_URL.replace(/^http/i, 'ws').replace(/\/$/, '');
 
 const unauthorized = (socket: any) => {
   try {
@@ -52,7 +55,7 @@ export function setupWebSocket(server: Server) {
     let mlWs: WebSocket;
     try {
       mlWs = new WebSocket(
-        `ws://localhost:8000/ws/transcribe/${encodeURIComponent(responseId || '')}`
+        `${mlWsBaseUrl}/ws/transcribe/${encodeURIComponent(responseId || '')}`
       );
     } catch (err) {
       logger.error('Failed to connect to ML WebSocket:', err);

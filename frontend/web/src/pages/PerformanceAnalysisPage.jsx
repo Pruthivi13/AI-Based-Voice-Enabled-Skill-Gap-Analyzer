@@ -37,6 +37,7 @@ import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
 import { useTheme } from '../context/ThemeContext';
 import RoadmapSection from '../components/RoadmapSection';
+import RoadmapErrorBoundary from '../components/RoadmapErrorBoundary';
 import CourseRecommendations from '../components/CourseRecommendations';
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function PerformanceAnalysisPage() {
@@ -300,12 +301,14 @@ export default function PerformanceAnalysisPage() {
         )}
 
         {!roadmapLoading && roadmap && (
-          <RoadmapSection
-            nodes={roadmap.nodes}
-            edges={roadmap.edges}
-            targetRole={roadmapRole}
-            roadmapId={roadmapId}
-          />
+          <RoadmapErrorBoundary>
+            <RoadmapSection
+              nodes={roadmap.nodes}
+              edges={roadmap.edges}
+              targetRole={roadmapRole}
+              roadmapId={roadmapId}
+            />
+          </RoadmapErrorBoundary>
         )}
       </section>
 

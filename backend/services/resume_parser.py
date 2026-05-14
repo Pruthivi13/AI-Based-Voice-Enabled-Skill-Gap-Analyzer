@@ -55,7 +55,9 @@ Return ONLY a valid JSON array, no explanation, no markdown:
     "hints": [
       "Hint related to their specific experience",
       "Another helpful tip"
-    ]
+    ],
+    "expectedKeywords": ["keyword1", "keyword2", "keyword3"],
+    "referenceAnswer": "A concise ideal answer covering the main points."
   }}
 ]
 """
@@ -75,7 +77,7 @@ Return ONLY a valid JSON array, no explanation, no markdown:
             ],
             temperature=0,
             seed=42,
-            max_tokens=1500,
+            max_tokens=2200,
         )
 
         raw = response.choices[0].message.content.strip()
@@ -98,6 +100,8 @@ Return ONLY a valid JSON array, no explanation, no markdown:
                 "difficulty": q.get("difficulty", "MEDIUM"),
                 "timeLimitSeconds": q.get("timeLimitSeconds", 120),
                 "hints": q.get("hints", []),
+                "expectedKeywords": q.get("expectedKeywords", []),
+                "referenceAnswer": q.get("referenceAnswer", ""),
                 "role": target_role,
                 "source": "resume"
             })

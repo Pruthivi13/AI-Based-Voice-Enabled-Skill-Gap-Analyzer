@@ -50,7 +50,9 @@ Return ONLY a valid JSON array:
       "First helpful hint here",
       "Second helpful hint here",
       "Optional third hint"
-    ]
+    ],
+    "expectedKeywords": ["keyword1", "keyword2", "keyword3"],
+    "referenceAnswer": "A concise ideal answer covering the main points."
   }}
 ]
 """
@@ -87,7 +89,7 @@ Return ONLY a valid JSON array:
                     ],
                     temperature=0,
                     seed=42,
-                    max_tokens=1000,
+                    max_tokens=1800,
                 )
                 logger.info(f"Success with model: {model_name}")
                 break
@@ -118,6 +120,8 @@ Return ONLY a valid JSON array:
                 "difficulty": q.get("difficulty", "MEDIUM"),
                 "timeLimitSeconds": q.get("timeLimitSeconds", 120),
                 "hints": q.get("hints", []),
+                "expectedKeywords": q.get("expectedKeywords", []),
+                "referenceAnswer": q.get("referenceAnswer", ""),
                 "role": target_role,
             })
 

@@ -3,6 +3,7 @@ import * as SessionsService from './sessions.service';
 import { createSessionSchema } from './sessions.schema';
 import { sendSuccess, sendError } from '../../utils/apiResponse';
 import { logger } from '../../utils/logger';
+import { buildStoredQuestionRubric } from '../../utils/questionRubric';
 
 export const createSession = async (
   req: any,
@@ -156,15 +157,25 @@ export const createSessionWithResume = async (
     // Save AI-generated questions to the DB
     const savedQuestions = await Promise.all(
       questions.map(async (q: any) => {
+        const rubric = buildStoredQuestionRubric(q);
         return prisma.question.upsert({
           where: { id: q.id },
-          update: {},
+          update: {
+            hints: rubric.hints,
+            expectedKeywords: rubric.expectedKeywords,
+            referenceAnswer: rubric.referenceAnswer,
+            ...(rubric.role ? { role: rubric.role } : {}),
+          },
           create: {
             id: q.id,
             content: q.content,
             category: (q.category || interviewType) as any,
             difficulty: (q.difficulty || difficulty) as any,
             timeLimitSeconds: q.timeLimitSeconds || 120,
+            hints: rubric.hints,
+            expectedKeywords: rubric.expectedKeywords,
+            referenceAnswer: rubric.referenceAnswer,
+            ...(rubric.role ? { role: rubric.role } : {}),
             isActive: true,
           },
         });
@@ -181,6 +192,7 @@ export const createSessionWithResume = async (
         experienceLevel,
         questionCount: questions.length,
         title: `${targetRole} ${interviewType} Interview`,
+        questionsJson: questions as any,
       },
     });
 
@@ -249,21 +261,30 @@ export const createTargetedSession = async (
     }
 
     const savedQuestions = await Promise.all(
-      questions.map(async (q: any) =>
-        (prismaDb as any).question.upsert({
+      questions.map(async (q: any) => {
+        const rubric = buildStoredQuestionRubric(q);
+        return (prismaDb as any).question.upsert({
           where: { id: q.id },
-          update: { hints: q.hints ?? null },
+          update: {
+            hints: rubric.hints,
+            expectedKeywords: rubric.expectedKeywords,
+            referenceAnswer: rubric.referenceAnswer,
+            ...(rubric.role ? { role: rubric.role } : {}),
+          },
           create: {
             id: q.id,
             content: q.content,
             category: (q.category || interviewType) as any,
             difficulty: (q.difficulty || difficulty) as any,
             timeLimitSeconds: q.timeLimitSeconds || 120,
-            hints: q.hints ?? null,
+            hints: rubric.hints,
+            expectedKeywords: rubric.expectedKeywords,
+            referenceAnswer: rubric.referenceAnswer,
+            ...(rubric.role ? { role: rubric.role } : {}),
             isActive: true,
           },
         })
-      )
+      })
     );
 
     const session = await (prismaDb as any).interviewSession.create({
