@@ -362,25 +362,36 @@ export const generateSessionAnalysis = async (
   if (!session) throw new ApiError('NOT_FOUND', 'Session not found.', 404);
 
   for (const response of session.responses) {
+    // Skip analysis entirely for questions the user skipped
+    const isSkipped =
+      !response.transcript ||
+      response.transcript.trim() === '[skipped]' ||
+      response.transcript.trim() === '';
+
+    if (isSkipped) {
+      // Remove any stale analysis from a previous attempt
+      await prisma.responseAnalysis.deleteMany({
+        where: { responseId: response.id },
+      });
+      continue;
+    }
+
     let analysisData: any = {
-      clarityScore: 7.5,
-      fluencyScore: 7.2,
-      confidenceScore: 7.0,
-      relevanceScore: 7.8,
-      grammarScore: 7.4,
-      pronunciationScore: 7.1,
-      technicalScore: 7.6,
-      fillerWordCount: 5,
-      speechRateWpm: 130,
-      sentiment: 'positive',
-      overallScore: 7.4,
+      clarityScore: null,
+      fluencyScore: null,
+      confidenceScore: null,
+      relevanceScore: null,
+      grammarScore: null,
+      pronunciationScore: null,
+      technicalScore: null,
+      fillerWordCount: null,
+      speechRateWpm: null,
+      sentiment: 'neutral',
+      overallScore: null,
       llmProvider: null,
       scorerBackend: 'fallback_mock',
       feedbackJson: [
         'Fallback analysis: ML services unavailable; these scores are provisional.',
-        'Good structure',
-        'Add more examples',
-        'Reduce filler words',
       ],
     };
 
@@ -452,9 +463,10 @@ export const generateSessionAnalysis = async (
     where: { response: { sessionId } },
   });
 
-  const overallScore = parseFloat(
-    avg(analyses.map((a) => a.overallScore)).toFixed(1)
-  );
+  const scoredAnalyses = analyses.filter((a) => a.overallScore !== null);
+  const overallScore = scoredAnalyses.length > 0
+    ? parseFloat(avg(scoredAnalyses.map((a) => a.overallScore)).toFixed(1))
+    : 0;
 
   await prisma.report.upsert({
     where: { sessionId },
@@ -477,11 +489,11 @@ export const generateSessionAnalysis = async (
           'Fluency',
         ],
         values: [
-          avg(analyses.map((a) => a.clarityScore)),
-          avg(analyses.map((a) => a.confidenceScore)),
-          avg(analyses.map((a) => a.technicalScore)),
-          avg(analyses.map((a) => a.clarityScore)),
-          avg(analyses.map((a) => a.fluencyScore)),
+          avg(scoredAnalyses.map((a) => a.clarityScore)),
+          avg(scoredAnalyses.map((a) => a.confidenceScore)),
+          avg(scoredAnalyses.map((a) => a.technicalScore)),
+          avg(scoredAnalyses.map((a) => a.clarityScore)),
+          avg(scoredAnalyses.map((a) => a.fluencyScore)),
         ],
       },
     },
@@ -505,11 +517,11 @@ export const generateSessionAnalysis = async (
           'Fluency',
         ],
         values: [
-          avg(analyses.map((a) => a.clarityScore)),
-          avg(analyses.map((a) => a.confidenceScore)),
-          avg(analyses.map((a) => a.technicalScore)),
-          avg(analyses.map((a) => a.clarityScore)),
-          avg(analyses.map((a) => a.fluencyScore)),
+          avg(scoredAnalyses.map((a) => a.clarityScore)),
+          avg(scoredAnalyses.map((a) => a.confidenceScore)),
+          avg(scoredAnalyses.map((a) => a.technicalScore)),
+          avg(scoredAnalyses.map((a) => a.clarityScore)),
+          avg(scoredAnalyses.map((a) => a.fluencyScore)),
         ],
       },
     },
