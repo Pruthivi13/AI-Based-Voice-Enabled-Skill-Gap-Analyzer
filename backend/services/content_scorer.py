@@ -3,14 +3,47 @@ content_scorer.py — Hybrid content evaluation using the fine-tuned binary mode
 
 Loads interview_content_model_binary and scores transcripts
 using keyword overlap + model prediction (hybrid logic).
+Falls back to local SentenceTransformer similarity when the
+fine-tuned weights are not present.
+
+Set CONTENT_SCORER_BACKEND=semantic in .env to skip the
+transformer model entirely (useful in dev / CI environments).
 """
 from __future__ import annotations
 
 import os
 import re
 from math import sqrt
+from pathlib import Path
 from typing import Any, Optional
 from utils.logger import setup_logger
+
+
+def _load_env_file() -> None:
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv(dotenv_path=env_path)
+        return
+    except ImportError:
+        pass
+
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if key not in {"CONTENT_SCORER_BACKEND", "CONTENT_SCORER_MODEL_PATH"}:
+            continue
+        os.environ.setdefault(key, value.strip().strip("\"'"))
+
+
+_load_env_file()
 
 logger = setup_logger(__name__)
 
@@ -18,10 +51,15 @@ logger = setup_logger(__name__)
 _model = None
 _tokenizer = None
 
-# Resolve from project root regardless of working directory
+# ── One-time availability flag (avoids re-logging on every request) ──────────
+_model_available: Optional[bool] = None
+
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.normpath(
-    os.path.join(_THIS_DIR, "../../models/interview_content_model_binary")
+MODEL_PATH = os.environ.get(
+    "CONTENT_SCORER_MODEL_PATH",
+    os.path.normpath(
+        os.path.join(_THIS_DIR, "../../models/interview_content_model_binary")
+    ),
 )
 MODEL_WEIGHT_FILES = (
     "pytorch_model.bin",
@@ -29,6 +67,9 @@ MODEL_WEIGHT_FILES = (
     "tf_model.h5",
     "flax_model.msgpack",
 )
+
+# Set CONTENT_SCORER_BACKEND=semantic to always use the local fallback
+_FORCE_SEMANTIC = os.environ.get("CONTENT_SCORER_BACKEND", "").lower() == "semantic"
 
 
 def _model_files_present() -> bool:
@@ -38,10 +79,42 @@ def _model_files_present() -> bool:
     )
 
 
+def _check_model_available() -> bool:
+    """
+    Checks model availability once and caches the result.
+    Logs only on first call so warnings don't spam on every request.
+    """
+    global _model_available
+    if _model_available is not None:
+        return _model_available
+
+    if _FORCE_SEMANTIC:
+        logger.info(
+            "CONTENT_SCORER_BACKEND=semantic - skipping transformer model, "
+            "using local semantic scorer."
+        )
+        _model_available = False
+        return False
+
+    if not _model_files_present():
+        logger.warning(
+            "Content scorer weights not found at '%s'. "
+            "Using local semantic similarity as fallback. "
+            "To silence this, set CONTENT_SCORER_BACKEND=semantic in your .env, "
+            "or place model weights at the path above.",
+            MODEL_PATH,
+        )
+        _model_available = False
+        return False
+
+    _model_available = True
+    return True
+
+
 def get_scorer_model():
     global _model, _tokenizer
     if _model is None:
-        if not _model_files_present():
+        if not _check_model_available():
             raise FileNotFoundError(
                 f"Content scorer weights were not found in {MODEL_PATH}"
             )
@@ -52,7 +125,7 @@ def get_scorer_model():
         _model = AutoModelForSequenceClassification.from_pretrained(MODEL_PATH)
         torch.set_grad_enabled(False)
         _model.eval()
-        logger.info("Content model loaded.")
+        logger.info("Content model loaded successfully.")
     return _model, _tokenizer
 
 
@@ -112,15 +185,17 @@ def _ngram_counts(text: str) -> dict[str, int]:
 
 _st_model = None
 
+
 def get_sentence_transformer():
     global _st_model
     if _st_model is None:
         try:
             from sentence_transformers import SentenceTransformer
-            logger.info("Loading SentenceTransformer ('all-MiniLM-L6-v2') for semantic fallback...")
+            logger.info("Loading SentenceTransformer ('all-MiniLM-L6-v2') for semantic scoring...")
             _st_model = SentenceTransformer('all-MiniLM-L6-v2')
+            logger.info("SentenceTransformer loaded successfully.")
         except ImportError:
-            logger.warning("sentence-transformers not installed. Fallback to basic counting.")
+            logger.warning("sentence-transformers not installed. Falling back to ngram cosine similarity.")
             return None
     return _st_model
 
@@ -145,7 +220,7 @@ def semantic_similarity(answer: str, reference: str) -> float:
             cosine_score = util.cos_sim(embeddings1, embeddings2)
             return round(float(cosine_score[0][0]), 3)
         except Exception as error:
-            logger.debug("SentenceTransformer failed: %s", error)
+            logger.debug("SentenceTransformer inference failed: %s", error)
 
     return round(_cosine_from_counts(_ngram_counts(answer), _ngram_counts(reference)), 3)
 
@@ -221,7 +296,7 @@ def model_predict_binary(question: str, answer: str) -> str:
     id2label = getattr(model.config, "id2label", {0: "LABEL_0", 1: "LABEL_1"})
     raw_label = id2label.get(predicted_class, str(predicted_class)).upper()
 
-    logger.debug(f"Raw model label: {raw_label} (class index: {predicted_class})")
+    logger.debug("Raw model label: %s (class index: %d)", raw_label, predicted_class)
 
     # Normalise whatever label name to STRONG / NOT_STRONG
     if any(x in raw_label for x in ["STRONG", "1", "GOOD", "CORRECT", "POSITIVE"]):
@@ -231,27 +306,31 @@ def model_predict_binary(question: str, answer: str) -> str:
         return "STRONG"
     return "NOT_STRONG"
 
-def hybrid_score(question: str, answer: str, reference: str, keywords_text: str = "") -> dict:
+def hybrid_score(
+    question: str,
+    answer: str,
+    reference: str,
+    keywords_text: str = "",
+) -> dict:
     """
-    Hybrid scoring — keyword overlap carries most weight since
-    the binary model acts as a weak signal.
-
-    Rules:
-    - overlap >= 0.7                          → STRONG
-    - overlap >= 0.4  OR model says STRONG    → AVERAGE  
-    - everything else                         → WEAK
+    Hybrid scoring.
+    If the fine-tuned model is unavailable, uses semantic similarity only.
+    The unavailability check is cached after the first call.
     """
     model_error: Optional[str] = None
+    model_label: Optional[str] = None
     scorer_backend = "transformer"
-    try:
-        model_label = model_predict_binary(question, answer)
-    except Exception as error:
-        model_error = str(error)
+
+    if not _check_model_available():
+        model_error = "model_not_found"
         scorer_backend = "local_semantic"
-        logger.warning(
-            "Content scorer model unavailable; using local semantic signal: %s",
-            error,
-        )
+    else:
+        try:
+            model_label = model_predict_binary(question, answer)
+        except Exception as error:
+            model_error = str(error)
+            scorer_backend = "local_semantic"
+            logger.debug("Transformer probe failed, using local semantic: %s", error)
 
     overlap_vs_answer = keyword_overlap(answer, reference)
     if keywords_text:
@@ -262,6 +341,7 @@ def hybrid_score(question: str, answer: str, reference: str, keywords_text: str 
 
     semantic = semantic_similarity(answer, reference)
     answer_length = len(clean_words(answer))
+
     if model_error:
         model_label = "STRONG" if semantic >= 0.52 or overlap >= 0.55 else "NOT_STRONG"
 
@@ -269,12 +349,12 @@ def hybrid_score(question: str, answer: str, reference: str, keywords_text: str 
         overlap=overlap,
         semantic=semantic,
         answer_length=answer_length,
-        model_label=model_label,
+        model_label=model_label or "NOT_STRONG",
     )
     final_score = _score_to_label(content_score)
 
     result = {
-        "model_label": model_label,
+        "model_label": model_label or "NOT_STRONG",
         "scorer_backend": scorer_backend,
         "keyword_overlap": overlap,
         "semantic_similarity": semantic,
@@ -283,7 +363,7 @@ def hybrid_score(question: str, answer: str, reference: str, keywords_text: str 
         "final_score": final_score,
         "content_score": content_score,
     }
-    if model_error:
+    if model_error and model_error != "model_not_found":
         result["model_error"] = model_error
     return result
 
@@ -324,7 +404,7 @@ def evaluate_answer(
     Full evaluation pipeline.
     Returns the complete scoring result dict.
     """
-    logger.info(f"Evaluating answer for question: {question[:60]}...")
+    logger.info("Evaluating answer for question: %s...", question[:60])
     reference_text = _reference_with_expected_terms(
         reference,
         expected_key_points=expected_key_points,

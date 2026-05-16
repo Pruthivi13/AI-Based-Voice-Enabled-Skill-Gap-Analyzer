@@ -19,11 +19,11 @@ const getRatingLabel = (score: number): string => {
   return 'Needs Improvement';
 };
 
-const avg = (arr: (number | null)[]): number => {
-  const valid = arr.filter((n) => n !== null) as number[];
+const avg = (arr: (number | null)[]): number | null => {
+  const valid = arr.filter((n): n is number => n !== null && n > 0);
   return valid.length
     ? parseFloat((valid.reduce((a, b) => a + b, 0) / valid.length).toFixed(1))
-    : 0;
+    : null;
 };
 
 const toStringArray = (value: any): string[] => {
@@ -93,7 +93,7 @@ const mapPipelineResultToAnalysis = (mlResult: any) => {
   const scorerBackend =
     mlResult?.scorer_backend ??
     mlResult?.content_model_evaluation?.scorer_backend ??
-    null;
+    'unknown';
   const hasAudio = Boolean(audio.audio_available);
   const scoringMode = scoringModeLabel(llmProvider, scorerBackend);
   const isHeuristic =
@@ -407,6 +407,12 @@ export const generateSessionAnalysis = async (
       const { expectedKeywords, expectedKeyPoints, referenceAnswer } =
         buildEvaluationRubric(response.question, session.targetRole);
 
+      logger.info(
+        `Response ${response.id}: audioUrl=${audioUrl ?? 'NULL'}, transcript length=${
+          (response.transcript || '').length
+        }`
+      );
+
       const pipelineResult = await analyzeAnswerPipeline({
         responseId: response.id,
         userId,
@@ -444,7 +450,7 @@ export const generateSessionAnalysis = async (
             sentiment: mlResult.sentiment,
             overallScore: mlResult.overallScore,
             llmProvider: mlResult.llmProvider ?? null,
-            scorerBackend: mlResult.scorerBackend ?? null,
+            scorerBackend: mlResult.scorerBackend ?? 'unknown',
             feedbackJson: mlResult.feedbackJson,
           };
         } else {
@@ -468,9 +474,19 @@ export const generateSessionAnalysis = async (
   });
 
   const scoredAnalyses = analyses.filter((a) => a.overallScore !== null);
-  const overallScore = scoredAnalyses.length > 0
-    ? parseFloat(avg(scoredAnalyses.map((a) => a.overallScore)).toFixed(1))
-    : 0;
+  const overallScoreAvg = avg(scoredAnalyses.map((a) => a.overallScore));
+  const overallScore = overallScoreAvg ?? 0;
+
+  const radarRaw = [
+    { label: 'Communication', value: avg(scoredAnalyses.map((a) => a.relevanceScore)) },
+    { label: 'Technical', value: avg(scoredAnalyses.map((a) => a.technicalScore)) },
+    { label: 'Clarity', value: avg(scoredAnalyses.map((a) => a.clarityScore)) },
+    { label: 'Confidence', value: avg(scoredAnalyses.map((a) => a.confidenceScore)) },
+    { label: 'Fluency', value: avg(scoredAnalyses.map((a) => a.fluencyScore)) },
+  ];
+  const radarFiltered = radarRaw.filter(
+    (item): item is { label: string; value: number } => item.value !== null
+  );
 
   await prisma.report.upsert({
     where: { sessionId },
@@ -485,20 +501,8 @@ export const generateSessionAnalysis = async (
         'Use measurable examples',
       ],
       radarDataJson: {
-        labels: [
-          'Communication',
-          'Confidence',
-          'Technical',
-          'Clarity',
-          'Fluency',
-        ],
-        values: [
-          avg(scoredAnalyses.map((a) => a.relevanceScore)),
-          avg(scoredAnalyses.map((a) => a.confidenceScore)),
-          avg(scoredAnalyses.map((a) => a.technicalScore)),
-          avg(scoredAnalyses.map((a) => a.clarityScore)),
-          avg(scoredAnalyses.map((a) => a.fluencyScore)),
-        ],
+        labels: radarFiltered.map((item) => item.label),
+        values: radarFiltered.map((item) => item.value),
       },
     },
     create: {
@@ -513,20 +517,8 @@ export const generateSessionAnalysis = async (
         'Use measurable examples',
       ],
       radarDataJson: {
-        labels: [
-          'Communication',
-          'Confidence',
-          'Technical',
-          'Clarity',
-          'Fluency',
-        ],
-        values: [
-          avg(scoredAnalyses.map((a) => a.relevanceScore)),
-          avg(scoredAnalyses.map((a) => a.confidenceScore)),
-          avg(scoredAnalyses.map((a) => a.technicalScore)),
-          avg(scoredAnalyses.map((a) => a.clarityScore)),
-          avg(scoredAnalyses.map((a) => a.fluencyScore)),
-        ],
+        labels: radarFiltered.map((item) => item.label),
+        values: radarFiltered.map((item) => item.value),
       },
     },
   });

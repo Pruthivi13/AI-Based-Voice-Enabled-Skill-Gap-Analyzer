@@ -195,6 +195,50 @@ export default function PerformanceAnalysisPage() {
               score={radarData.values[i] ?? 0}
             />
           ))}
+
+          {(() => {
+            const audioMetrics = ['Confidence', 'Fluency'];
+            const missing = audioMetrics.filter(
+              (metric) => !radarData.labels.includes(metric)
+            );
+            return missing.map((label) => (
+              <div
+                key={label}
+                className={`card flex flex-col gap-3 opacity-50 ${
+                  isDark ? 'border-white/10' : 'border-surface-200'
+                }`}
+              >
+                <span
+                  className={`text-sm font-semibold ${
+                    isDark ? 'text-white/50' : 'text-ink-500'
+                  }`}
+                >
+                  {label}
+                </span>
+                <div className="flex items-baseline gap-1">
+                  <span
+                    className={`text-2xl font-extrabold ${
+                      isDark ? 'text-white/25' : 'text-ink-300'
+                    }`}
+                  >
+                    N/A
+                  </span>
+                </div>
+                <p
+                  className={`text-xs ${
+                    isDark ? 'text-white/30' : 'text-ink-400'
+                  }`}
+                >
+                  Requires recorded audio
+                </p>
+                <div
+                  className={`w-full h-2 rounded-full ${
+                    isDark ? 'bg-white/5' : 'bg-surface-100'
+                  }`}
+                />
+              </div>
+            ));
+          })()}
         </div>
       </section>
 
