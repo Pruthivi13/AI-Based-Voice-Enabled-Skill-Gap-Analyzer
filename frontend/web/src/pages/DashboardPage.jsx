@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AlertTriangle,
-  BarChart3,
+  BarChart2,
   BookOpen,
   Calendar,
   CheckCircle2,
@@ -138,6 +138,16 @@ function MotionIcon({
     >
       <Icon size={size} strokeWidth={2.4} fill={burn ? 'currentColor' : 'none'} />
     </motion.span>
+  );
+}
+
+function GifFlame({ size = 18 }) {
+  return (
+    <img 
+      src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif" 
+      alt="🔥" 
+      style={{ width: size, height: size, objectFit: 'contain' }} 
+    />
   );
 }
 
@@ -408,7 +418,7 @@ function StreakCounter({ streak, longestStreak, atRisk, isDark }) {
           border: `1px solid ${streak > 0 ? 'rgba(249,115,22,0.24)' : isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}`,
         }}>
           <MotionIcon
-            Icon={Flame}
+            Icon={GifFlame}
             size={streak > 5 ? 40 : 34}
             color={streak > 0 ? '#f97316' : isDark ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.28)'}
             burn={streak > 0}
@@ -1457,7 +1467,7 @@ export default function DashboardPage() {
           {
             label: 'Average Score',
             value: `${analytics.averageScore ?? 0}/10`,
-            Icon: BarChart3,
+            Icon: BarChart2,
             iconColor: '#60a5fa',
             iconBg: isDark ? 'rgba(59,130,246,0.15)' : 'rgba(59,130,246,0.1)',
             iconBorder: 'rgba(59,130,246,0.25)',
@@ -1465,7 +1475,7 @@ export default function DashboardPage() {
           {
             label: 'Current Streak',
             value: `${streak.currentStreak}d`,
-            Icon: Flame,
+            Icon: GifFlame,
             iconColor: '#f97316',
             burn: streak.currentStreak > 0,
             iconBg: isDark ? 'rgba(249,115,22,0.15)' : 'rgba(249,115,22,0.1)',
@@ -1548,7 +1558,7 @@ export default function DashboardPage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
           <div>
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: headColor, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <MotionIcon Icon={BarChart3} size={18} color="#60a5fa" title="Practice activity" />
+              <MotionIcon Icon={BarChart2} size={18} color="#60a5fa" title="Practice activity" />
               Practice Activity
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: 12, color: subColor }}>
@@ -1562,7 +1572,7 @@ export default function DashboardPage() {
               fontSize: 12, fontWeight: 700, color: '#f97316',
               display: 'inline-flex', alignItems: 'center', gap: 6,
             }}>
-              <MotionIcon Icon={Flame} size={14} color="#f97316" burn title="Current streak" />
+              <MotionIcon Icon={GifFlame} size={14} color="#f97316" burn title="Current streak" />
               {streak.currentStreak} day streak
             </div>
           )}
@@ -1607,7 +1617,7 @@ export default function DashboardPage() {
                 valueColor: '#a78bfa',
               },
               {
-                Icon: BarChart3,
+                Icon: BarChart2,
                 iconBg: isDark ? 'rgba(59,130,246,0.12)' : 'rgba(59,130,246,0.08)',
                 iconBorder: 'rgba(59,130,246,0.2)',
                 value: (analytics.averageScore ?? 0) > 0
@@ -1617,7 +1627,7 @@ export default function DashboardPage() {
                 valueColor: '#60a5fa',
               },
               {
-                Icon: Flame,
+                Icon: GifFlame,
                 burn: streak.currentStreak > 0,
                 iconBg: isDark ? 'rgba(249,115,22,0.12)' : 'rgba(249,115,22,0.08)',
                 iconBorder: 'rgba(249,115,22,0.2)',

@@ -7,8 +7,26 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { X, Zap, TrendingDown, TrendingUp, Minus, AlertTriangle, ChevronRight, Dumbbell } from 'lucide-react';
+import { X, Zap, TrendingDown, TrendingUp, Minus, AlertTriangle, ChevronRight, Dumbbell, Settings, Shield, Target, AudioLines, PenLine, Crosshair, BarChart2, Lightbulb } from 'lucide-react';
 import { createTargetedSession } from '../services/api';
+
+// Map backend icon key → Lucide component
+const ICON_MAP = {
+  Settings:   Settings,
+  Shield:     Shield,
+  Target:     Target,
+  AudioLines: AudioLines,
+  PenLine:    PenLine,
+  Crosshair:  Crosshair,
+  BarChart2:  BarChart2,
+  Dumbbell:   Dumbbell,
+};
+
+function SkillIconFromKey({ iconKey, size = 20, style = {} }) {
+  const IconComponent = ICON_MAP[iconKey];
+  if (IconComponent) return <IconComponent size={size} strokeWidth={2.2} style={style} />;
+  return <Lightbulb size={size} strokeWidth={2.2} style={style} />;
+}
 
 const URGENCY = {
   critical: { ring:'rgba(239,68,68,0.4)',  bg:'rgba(239,68,68,0.08)',  text:'#f87171', badge:'bg-red-500/15 text-red-400 border-red-500/30',    label:'Critical'     },
@@ -45,7 +63,7 @@ function SkillCard({ skill, index }) {
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2.5">
-          <span className="text-2xl leading-none">{skill.emoji === '💪' ? <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f4aa/512.gif" alt="💪" style={{ width: '1.4em', height: '1.4em', transform: 'translateY(-1px)' }} /> : skill.emoji}</span>
+          <span className="text-2xl leading-none flex items-center"><SkillIconFromKey iconKey={skill.icon} size={22} style={{ color: u.text }} /></span>
           <div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-white/90">{skill.label}</span>
@@ -66,7 +84,7 @@ function SkillCard({ skill, index }) {
         </div>
       </div>
       <ScoreBar score={skill.avgScore} color={u.text} />
-      <p className="text-[11px] text-white/45 mt-3 leading-relaxed">💡 {skill.suggestedFocusPrompt}</p>
+      <p className="text-[11px] text-white/45 mt-3 leading-relaxed flex items-start gap-1.5"><Lightbulb size={13} className="flex-shrink-0 mt-0.5" style={{ color: 'rgba(255,255,255,0.45)' }} /> {skill.suggestedFocusPrompt}</p>
     </motion.div>
   );
 }

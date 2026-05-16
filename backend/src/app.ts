@@ -25,10 +25,29 @@ import notesRoutes from './modules/notes/notes.routes';
 import warmupRoutes from './modules/warmup/warmup.routes';
 import questionFeedbackRoutes from './modules/questions/questionFeedback.routes';
 
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Allow requests with no origin (curl, Postman, server-to-server)
+    if (!origin) return callback(null, true);
+    const allowed = [
+      env.FRONTEND_ORIGIN,
+      'http://localhost:5173',
+      'http://localhost:5174',
+    ];
+    if (allowed.includes(origin)) return callback(null, true);
+    return callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  credentials: true,
+  maxAge: 0, // Never cache preflight — forces browsers to re-validate every time
+};
+
 const app = express();
 
+// CORS must come before helmet so its headers aren't stripped
+app.use(cors(corsOptions));
+// Handle preflight OPTIONS for all routes (Express 5 compatible regex wildcard)
+app.options(/.*/, cors(corsOptions));
 app.use(helmet());
-app.use(cors({ origin: env.FRONTEND_ORIGIN }));
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

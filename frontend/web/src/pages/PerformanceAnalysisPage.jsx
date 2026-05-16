@@ -39,6 +39,7 @@ import { useTheme } from '../context/ThemeContext';
 import RoadmapSection from '../components/RoadmapSection';
 import RoadmapErrorBoundary from '../components/RoadmapErrorBoundary';
 import CourseRecommendations from '../components/CourseRecommendations';
+import { RotateCw, History } from 'lucide-react';
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function PerformanceAnalysisPage() {
   const navigate = useNavigate();
@@ -161,17 +162,21 @@ export default function PerformanceAnalysisPage() {
           <span className="text-6xl font-extrabold text-primary-500">
             {report?.overallScore ?? 'N/A'}
           </span>
-          <span className="text-2xl text-ink-500 font-bold">/ 10</span>
+          <span className="text-2xl font-bold" style={{ color: isDark ? 'rgba(255,255,255,0.5)' : '#78716c' }}>/ 10</span>
         </div>
-        <p className="text-ink-500">
+        <p style={{ color: isDark ? 'rgba(255,255,255,0.6)' : '#78716c', fontSize: 16 }}>
           Overall Rating:{' '}
-          <span className="font-bold text-ink-900">
+          <span style={{ fontWeight: 700, color: isDark ? '#f1f5f9' : '#1c1917' }}>
             {report?.ratingLabel ?? 'N/A'}
           </span>
         </p>
-        {report?.summary && (
-          <p className="text-ink-500 mt-2 max-w-xl mx-auto text-sm">
+        {report?.summary ? (
+          <p style={{ color: isDark ? 'rgba(255,255,255,0.55)' : '#78716c', marginTop: 8, maxWidth: 560, marginLeft: 'auto', marginRight: 'auto', fontSize: 14, lineHeight: 1.6 }}>
             {report.summary}
+          </p>
+        ) : (
+          <p style={{ color: isDark ? 'rgba(255,255,255,0.35)' : '#a8a29e', marginTop: 8, fontSize: 13, fontStyle: 'italic' }}>
+            No summary available for this session.
           </p>
         )}
       </section>
@@ -365,15 +370,15 @@ export default function PerformanceAnalysisPage() {
       <section className="flex flex-wrap gap-4 justify-center">
         <button
           onClick={() => navigate('/setup')}
-          className="btn-secondary px-8"
+          className="btn-secondary px-8 flex items-center gap-2"
         >
-          🔄 Practice Again
+          <RotateCw size={16} /> Practice Again
         </button>
         <button
           onClick={() => navigate('/history')}
-          className="btn-primary px-8"
+          className="btn-primary px-8 flex items-center gap-2"
         >
-          💾 View History
+          <History size={16} /> View History
         </button>
       </section>
     </div>
