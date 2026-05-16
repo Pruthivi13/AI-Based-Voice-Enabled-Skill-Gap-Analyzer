@@ -110,10 +110,25 @@ def _ngram_counts(text: str) -> dict[str, int]:
     return counts
 
 
+_st_model = None
+
+def get_sentence_transformer():
+    global _st_model
+    if _st_model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            logger.info("Loading SentenceTransformer ('all-MiniLM-L6-v2') for semantic fallback...")
+            _st_model = SentenceTransformer('all-MiniLM-L6-v2')
+        except ImportError:
+            logger.warning("sentence-transformers not installed. Fallback to basic counting.")
+            return None
+    return _st_model
+
+
 def semantic_similarity(answer: str, reference: str) -> float:
     """
     Local semantic similarity for environments where the fine-tuned weights are
-    not present. Uses TF-IDF when sklearn is installed, with a deterministic
+    not present. Uses SentenceTransformers, with a deterministic
     unigram/bigram cosine fallback.
     """
     answer = answer or ""
@@ -121,21 +136,18 @@ def semantic_similarity(answer: str, reference: str) -> float:
     if not clean_words(answer) or not clean_words(reference):
         return 0.0
 
-    try:
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        from sklearn.metrics.pairwise import cosine_similarity
+    st_model = get_sentence_transformer()
+    if st_model is not None:
+        try:
+            from sentence_transformers import util
+            embeddings1 = st_model.encode(answer, convert_to_tensor=True)
+            embeddings2 = st_model.encode(reference, convert_to_tensor=True)
+            cosine_score = util.cos_sim(embeddings1, embeddings2)
+            return round(float(cosine_score[0][0]), 3)
+        except Exception as error:
+            logger.debug("SentenceTransformer failed: %s", error)
 
-        vectorizer = TfidfVectorizer(
-            lowercase=True,
-            stop_words="english",
-            ngram_range=(1, 2),
-            token_pattern=r"(?u)\b[a-zA-Z][a-zA-Z0-9+#.-]*\b",
-        )
-        matrix = vectorizer.fit_transform([answer, reference])
-        return round(float(cosine_similarity(matrix[0], matrix[1])[0][0]), 3)
-    except Exception as error:
-        logger.debug("sklearn semantic similarity unavailable: %s", error)
-        return round(_cosine_from_counts(_ngram_counts(answer), _ngram_counts(reference)), 3)
+    return round(_cosine_from_counts(_ngram_counts(answer), _ngram_counts(reference)), 3)
 
 
 def _score_from_signals(
@@ -151,9 +163,9 @@ def _score_from_signals(
         _clamp(
             (
                 coverage_component * 0.52
-                + semantic * 0.28
+                + semantic * 0.34
                 + model_component * 0.12
-                + length_component * 0.08
+                + length_component * 0.02
             )
             * 10
         ),
@@ -179,6 +191,18 @@ def model_predict_binary(question: str, answer: str) -> str:
     model, tokenizer = get_scorer_model()
 
     input_text = f"Question: {question} Answer: {answer}"
+    try:
+        token_count = len(
+            tokenizer(input_text, add_special_tokens=True, truncation=False)["input_ids"]
+        )
+        if token_count > 512:
+            logger.info(
+                "Content model input has %d tokens and will be truncated to 512.",
+                token_count,
+            )
+    except Exception as error:
+        logger.debug("Could not estimate content model token count: %s", error)
+
     inputs = tokenizer(
         input_text,
         return_tensors="pt",
@@ -207,7 +231,7 @@ def model_predict_binary(question: str, answer: str) -> str:
         return "STRONG"
     return "NOT_STRONG"
 
-def hybrid_score(question: str, answer: str, reference: str) -> dict:
+def hybrid_score(question: str, answer: str, reference: str, keywords_text: str = "") -> dict:
     """
     Hybrid scoring — keyword overlap carries most weight since
     the binary model acts as a weak signal.
@@ -229,7 +253,13 @@ def hybrid_score(question: str, answer: str, reference: str) -> dict:
             error,
         )
 
-    overlap = keyword_overlap(answer, reference)
+    overlap_vs_answer = keyword_overlap(answer, reference)
+    if keywords_text:
+        overlap_vs_keywords = keyword_overlap(answer, keywords_text)
+        overlap = max(overlap_vs_answer, overlap_vs_keywords)
+    else:
+        overlap = overlap_vs_answer
+
     semantic = semantic_similarity(answer, reference)
     answer_length = len(clean_words(answer))
     if model_error:
@@ -275,14 +305,11 @@ def generate_feedback(final_score: str, overlap: float, answer_length: int) -> s
 
 def _reference_with_expected_terms(
     reference: str,
-    expected_keywords: list[str] | None = None,
     expected_key_points: list[str] | None = None,
 ) -> str:
     parts = [reference or ""]
     if expected_key_points:
         parts.extend(expected_key_points)
-    if expected_keywords:
-        parts.append(" ".join(expected_keywords))
     return " ".join(part for part in parts if part).strip()
 
 
@@ -300,10 +327,11 @@ def evaluate_answer(
     logger.info(f"Evaluating answer for question: {question[:60]}...")
     reference_text = _reference_with_expected_terms(
         reference,
-        expected_keywords=expected_keywords,
         expected_key_points=expected_key_points,
     )
-    if not clean_words(reference_text):
+    keywords_text = " ".join(expected_keywords or [])
+
+    if not clean_words(reference_text) and not clean_words(keywords_text):
         return {
             "model_label": "SKIPPED",
             "scorer_backend": "skipped",
@@ -313,7 +341,7 @@ def evaluate_answer(
             "content_score": None,
             "feedback": "No reference answer or expected keywords were available for content-model scoring.",
         }
-    scores = hybrid_score(question, answer, reference_text)
+    scores = hybrid_score(question, answer, reference_text, keywords_text)
     feedback = generate_feedback(
         scores["final_score"],
         scores["keyword_overlap"],

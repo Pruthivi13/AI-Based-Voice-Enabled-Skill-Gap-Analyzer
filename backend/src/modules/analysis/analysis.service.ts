@@ -94,20 +94,24 @@ const mapPipelineResultToAnalysis = (mlResult: any) => {
     mlResult?.scorer_backend ??
     mlResult?.content_model_evaluation?.scorer_backend ??
     null;
+  const hasAudio = Boolean(audio.audio_available);
   const scoringMode = scoringModeLabel(llmProvider, scorerBackend);
   const isHeuristic =
     llmProvider === 'heuristic_fallback' || scorerBackend === 'local_semantic';
-  const fluencyScore = bucketScore(delivery.fluency, isHeuristic);
-  const confidenceScore = bucketScore(delivery.confidence_cues, isHeuristic);
-  const pronunciationScore = bucketScore(
-    delivery.voice_quality ?? delivery.delivery,
-    isHeuristic
-  );
+  const fluencyScore = hasAudio
+    ? bucketScore(delivery.fluency, isHeuristic)
+    : null;
+  const confidenceScore = hasAudio
+    ? bucketScore(delivery.confidence_cues, isHeuristic)
+    : null;
+  const pronunciationScore = hasAudio
+    ? bucketScore(delivery.articulation, isHeuristic)
+    : null;
   const hesitationControlScore = bucketScore(delivery.hesitation_control, isHeuristic);
   const voiceQualityScore = bucketScore(delivery.voice_quality, isHeuristic);
   const wordsPerMinute = Number(audio.words_per_minute);
   const hasUsablePace =
-    Boolean(audio.audio_available) &&
+    hasAudio &&
     Number.isFinite(wordsPerMinute) &&
     wordsPerMinute > 0;
   const improvements = Array.isArray(mlResult?.improvements)
@@ -115,7 +119,7 @@ const mapPipelineResultToAnalysis = (mlResult: any) => {
     : [];
   const metricFeedback = [];
 
-  if (audio.audio_available) {
+  if (hasAudio) {
     if (hasUsablePace) {
       metricFeedback.push(`Speaking speed: ${Math.round(wordsPerMinute)} WPM`);
     }
@@ -144,7 +148,7 @@ const mapPipelineResultToAnalysis = (mlResult: any) => {
     fluencyScore,
     confidenceScore,
     relevanceScore: content.relevance ?? null,
-    grammarScore: content.clarity ?? null,
+    grammarScore: content.correctness ?? null,
     pronunciationScore,
     technicalScore:
       content.correctness != null && content.completeness != null
@@ -489,7 +493,7 @@ export const generateSessionAnalysis = async (
           'Fluency',
         ],
         values: [
-          avg(scoredAnalyses.map((a) => a.clarityScore)),
+          avg(scoredAnalyses.map((a) => a.relevanceScore)),
           avg(scoredAnalyses.map((a) => a.confidenceScore)),
           avg(scoredAnalyses.map((a) => a.technicalScore)),
           avg(scoredAnalyses.map((a) => a.clarityScore)),
@@ -517,7 +521,7 @@ export const generateSessionAnalysis = async (
           'Fluency',
         ],
         values: [
-          avg(scoredAnalyses.map((a) => a.clarityScore)),
+          avg(scoredAnalyses.map((a) => a.relevanceScore)),
           avg(scoredAnalyses.map((a) => a.confidenceScore)),
           avg(scoredAnalyses.map((a) => a.technicalScore)),
           avg(scoredAnalyses.map((a) => a.clarityScore)),
