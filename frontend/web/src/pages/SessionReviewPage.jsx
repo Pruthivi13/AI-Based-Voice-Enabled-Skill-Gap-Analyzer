@@ -38,7 +38,7 @@ function CommunityDifficultyBadge({ questionId }) {
   const pcts = stats.percentages || {};
   const dominant =
     pcts.tooEasy > 50 ? { label: 'Mostly found Easy', color: '#34d399', emoji: '😴' }
-    : pcts.tooHard > 50 ? { label: 'Mostly found Hard', color: '#f87171', emoji: '🔥' }
+    : pcts.tooHard > 50 ? { label: 'Mostly found Hard', color: '#f87171', emoji: <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif" alt="🔥" style={{ width: '1em', height: '1em', verticalAlign: '-0.15em' }} /> }
     : { label: 'Balanced difficulty', color: '#f97316', emoji: '🎯' };
 
   return (

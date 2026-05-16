@@ -115,8 +115,8 @@ export const createSession = async (userId: string, data: any) => {
       return prisma.question.upsert({
         where: { id: q.id },
         update: {
-          hints: rubric.hints,
-          expectedKeywords: rubric.expectedKeywords,
+          hints: rubric.hints as any,
+          expectedKeywords: rubric.expectedKeywords as any,
           referenceAnswer: rubric.referenceAnswer,
           ...(rubric.role ? { role: rubric.role } : {}),
         },
@@ -126,8 +126,8 @@ export const createSession = async (userId: string, data: any) => {
           category: (q.category || interviewType) as any,
           difficulty: (q.difficulty || difficulty) as any,
           timeLimitSeconds: q.timeLimitSeconds || 120,
-          hints: rubric.hints,
-          expectedKeywords: rubric.expectedKeywords,
+          hints: rubric.hints as any,
+          expectedKeywords: rubric.expectedKeywords as any,
           referenceAnswer: rubric.referenceAnswer,
           ...(rubric.role ? { role: rubric.role } : {}),
           isActive: true,

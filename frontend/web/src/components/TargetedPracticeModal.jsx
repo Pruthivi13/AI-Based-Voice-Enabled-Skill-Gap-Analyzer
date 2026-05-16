@@ -45,7 +45,7 @@ function SkillCard({ skill, index }) {
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2.5">
-          <span className="text-2xl leading-none">{skill.emoji}</span>
+          <span className="text-2xl leading-none">{skill.emoji === '💪' ? <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f4aa/512.gif" alt="💪" style={{ width: '1.4em', height: '1.4em', transform: 'translateY(-1px)' }} /> : skill.emoji}</span>
           <div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-white/90">{skill.label}</span>

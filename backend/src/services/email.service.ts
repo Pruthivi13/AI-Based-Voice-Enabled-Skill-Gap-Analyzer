@@ -1,10 +1,19 @@
 import sgMail from '@sendgrid/mail';
 import { logger } from '../utils/logger';
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY || '');
+const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+if (SENDGRID_API_KEY) {
+  sgMail.setApiKey(SENDGRID_API_KEY);
+}
 
 const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'noreply@yourapp.com';
 const APP_NAME   = process.env.APP_NAME || 'InterviewPrep';
+
+function isSendGridConfigured(): boolean {
+  if (SENDGRID_API_KEY) return true;
+  logger.warn('SendGrid is not configured; skipping email send.');
+  return false;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -31,6 +40,7 @@ function formatDateTime(date: Date): string {
 // ── Email senders ─────────────────────────────────────────────────────────────
 
 export async function sendReminderEmail(opts: ReminderEmailOpts): Promise<void> {
+  if (!isSendGridConfigured()) return;
   const { to, sessionTitle, scheduledAt } = opts;
   try {
     await sgMail.send({
@@ -63,6 +73,7 @@ export async function sendReminderEmail(opts: ReminderEmailOpts): Promise<void> 
 }
 
 export async function sendStreakAtRiskEmail(opts: StreakRiskEmailOpts): Promise<void> {
+  if (!isSendGridConfigured()) return;
   const { to, currentStreak } = opts;
   try {
     await sgMail.send({

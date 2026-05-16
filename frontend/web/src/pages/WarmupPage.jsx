@@ -41,7 +41,7 @@ const TIPS = [
 function ConfidenceLabel({ level }) {
   const map = {
     low:    { label: 'Building…',     color: '#fb923c', emoji: '🌱' },
-    medium: { label: 'Getting there', color: '#f97316', emoji: '🔥' },
+    medium: { label: 'Getting there', color: '#f97316', emoji: <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif" alt="🔥" style={{ width: '1em', height: '1em', verticalAlign: '-0.15em' }} /> },
     high:   { label: 'Feeling good!', color: '#34d399', emoji: '⚡' },
   };
   const m = map[level] || map.medium;

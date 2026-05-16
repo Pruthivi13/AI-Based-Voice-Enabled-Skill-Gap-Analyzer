@@ -62,7 +62,7 @@ export default function WeakSkillInsightCard() {
               <div style={{ position:'relative', display:'flex', alignItems:'center', gap:16 }}>
                 {/* Icon */}
                 <div style={{ width:44, height:44, borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:22, background:`${s.accent}15`, border:`1px solid ${s.accent}30` }}>
-                  {primary.emoji}
+                  {primary.emoji === '💪' ? <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f4aa/512.gif" alt="💪" style={{ width: '1.4em', height: '1.4em' }} /> : primary.emoji}
                 </div>
 
                 {/* Text */}
@@ -115,7 +115,7 @@ export default function WeakSkillInsightCard() {
                       const sa = URGENCY[skill.urgency]?.accent || '#fbbf24';
                       return (
                         <span key={skill.key} style={{ padding:'2px 10px', borderRadius:99, fontSize:10, fontWeight:600, background:`${sa}12`, color:sa, border:`1px solid ${sa}25` }}>
-                          {skill.emoji} {skill.label} · {skill.avgScore.toFixed(1)}
+                          {skill.emoji === '💪' ? <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f4aa/512.gif" alt="💪" style={{ width: '1.4em', height: '1.4em', verticalAlign: '-0.25em', marginRight: '4px' }} /> : skill.emoji} {skill.label} · {skill.avgScore.toFixed(1)}
                         </span>
                       );
                     })}
