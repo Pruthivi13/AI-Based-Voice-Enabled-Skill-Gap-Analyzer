@@ -1,6 +1,24 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  AlertTriangle,
+  BarChart3,
+  BookOpen,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Crown,
+  FileText,
+  Flame,
+  Gem,
+  Mic,
+  Rocket,
+  Star,
+  Target,
+  Trophy,
+  TrendingUp,
+} from 'lucide-react';
 import { fetchDashboardData, fetchWeakSkillPrescription } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
 import LoadingState from '../components/LoadingState';
@@ -67,6 +85,59 @@ function TooltipBox({ text, x, y, isDark }) {
         borderTop:   `5px solid ${isDark ? '#1e293b' : '#111827'}`,
       }} />
     </div>
+  );
+}
+
+function MotionIcon({
+  Icon,
+  color = '#f97316',
+  size = 18,
+  burn = false,
+  pulse = false,
+  title,
+}) {
+  const burnAnimation = {
+    scale: [1, 1.12, 0.97, 1.08, 1],
+    rotate: [-3, 3, -2, 2, -3],
+    filter: [
+      'drop-shadow(0 0 4px rgba(251,146,60,0.65))',
+      'drop-shadow(0 0 14px rgba(249,115,22,0.95))',
+      'drop-shadow(0 0 6px rgba(253,186,116,0.75))',
+      'drop-shadow(0 0 18px rgba(234,88,12,0.9))',
+      'drop-shadow(0 0 4px rgba(251,146,60,0.65))',
+    ],
+  };
+
+  return (
+    <motion.span
+      title={title}
+      aria-label={title}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color,
+        lineHeight: 0,
+      }}
+      animate={
+        burn
+          ? burnAnimation
+          : pulse
+            ? { scale: [1, 1.08, 1], opacity: [0.85, 1, 0.85] }
+            : undefined
+      }
+      transition={
+        burn
+          ? { duration: 1.15, repeat: Infinity, ease: 'easeInOut' }
+          : pulse
+            ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' }
+            : undefined
+      }
+      whileHover={{ scale: 1.15, rotate: -4 }}
+      whileTap={{ scale: 0.95 }}
+    >
+      <Icon size={size} strokeWidth={2.4} fill={burn ? 'currentColor' : 'none'} />
+    </motion.span>
   );
 }
 
@@ -262,11 +333,16 @@ function ActivityHeatmap({ data = [], isDark }) {
 
 // ─── Streak Flame ──────────────────────────────────────────────────────────────
 function StreakCounter({ streak, longestStreak, atRisk, isDark }) {
-  const flames = ['💤', '🔥', '🔥', '🔥', '🔥', '⚡🔥⚡', '🌟🔥🌟', '💥🔥💥', '🏆🔥🏆'];
-  const flameEmoji = streak > 0 ? (flames[Math.min(streak, flames.length - 1)] || '🔥🔥🔥') : '💤';
-
-  // Milestone badge
-  const milestone = streak >= 30 ? '👑 Legendary' : streak >= 14 ? '💎 Unstoppable' : streak >= 7 ? '⭐ On Fire' : streak >= 3 ? '🚀 Rising' : null;
+  const milestone =
+    streak >= 30
+      ? { label: 'Legendary', Icon: Crown }
+      : streak >= 14
+        ? { label: 'Unstoppable', Icon: Gem }
+        : streak >= 7
+          ? { label: 'On Fire', Icon: Star }
+          : streak >= 3
+            ? { label: 'Rising', Icon: Rocket }
+            : null;
 
   return (
     <div
@@ -318,15 +394,26 @@ function StreakCounter({ streak, longestStreak, atRisk, isDark }) {
         zIndex: 1,
         flexShrink: 0,
       }}>
-        {/* Flame emoji */}
         <div style={{
-          fontSize: streak > 5 ? 48 : 42,
-          lineHeight: 1,
+          width: streak > 5 ? 58 : 52,
+          height: streak > 5 ? 58 : 52,
+          borderRadius: 16,
           flexShrink: 0,
-          filter: streak > 0 ? 'drop-shadow(0 4px 12px rgba(249,115,22,0.3))' : 'none',
-          transition: 'filter 0.4s ease',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: streak > 0
+            ? 'radial-gradient(circle at 50% 65%, rgba(251,146,60,0.24), rgba(249,115,22,0.09) 48%, transparent 72%)'
+            : isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
+          border: `1px solid ${streak > 0 ? 'rgba(249,115,22,0.24)' : isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}`,
         }}>
-          {flameEmoji}
+          <MotionIcon
+            Icon={Flame}
+            size={streak > 5 ? 40 : 34}
+            color={streak > 0 ? '#f97316' : isDark ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.28)'}
+            burn={streak > 0}
+            title={streak > 0 ? 'Active streak' : 'No active streak'}
+          />
         </div>
 
         {/* Streak number + label */}
@@ -360,8 +447,12 @@ function StreakCounter({ streak, longestStreak, atRisk, isDark }) {
               fontWeight: 600,
               color: isDark ? 'rgba(255,255,255,0.3)' : '#a8a29e',
               whiteSpace: 'nowrap',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
             }}>
-              🏆 Best: {longestStreak} day{longestStreak !== 1 ? 's' : ''}
+              <MotionIcon Icon={Trophy} size={13} color="#eab308" title="Best streak" />
+              Best: {longestStreak} day{longestStreak !== 1 ? 's' : ''}
             </span>
 
             {milestone && (
@@ -374,8 +465,12 @@ function StreakCounter({ streak, longestStreak, atRisk, isDark }) {
                 borderRadius: 99,
                 border: '1px solid rgba(249,115,22,0.18)',
                 whiteSpace: 'nowrap',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
               }}>
-                {milestone}
+                <MotionIcon Icon={milestone.Icon} size={12} color="#f97316" title={milestone.label} />
+                {milestone.label}
               </span>
             )}
           </div>
@@ -396,8 +491,12 @@ function StreakCounter({ streak, longestStreak, atRisk, isDark }) {
             border: '1px solid rgba(239,68,68,0.2)',
             animation: 'streakAtRiskPulse 2s ease-in-out infinite',
             whiteSpace: 'nowrap',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
           }}>
-            ⚠ Practice today!
+            <AlertTriangle size={13} strokeWidth={2.5} />
+            Practice today!
           </span>
         )}
 
@@ -497,8 +596,16 @@ function NextInterviewCard({ interview, isDark, onStart, onCancel }) {
         <p style={{
           fontSize:10, fontWeight:700, letterSpacing:'0.12em',
           textTransform:'uppercase', color: accentColor, marginBottom:4,
+          display: 'inline-flex', alignItems: 'center', gap: 6,
         }}>
-          {isGrace ? '🔴 Starting Now' : '⏳ Next Interview'}
+          <MotionIcon
+            Icon={isGrace ? AlertTriangle : Clock}
+            size={13}
+            color={accentColor}
+            pulse={isGrace}
+            title={isGrace ? 'Starting now' : 'Next interview'}
+          />
+          {isGrace ? 'Starting Now' : 'Next Interview'}
         </p>
 
         <h4 style={{ fontSize:16, fontWeight:700, color: isDark ? '#f1f5f9' : '#1c1917', margin:'0 0 4px' }}>
@@ -542,8 +649,10 @@ function NextInterviewCard({ interview, isDark, onStart, onCancel }) {
             background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.25)',
             borderRadius:10, padding:'8px 14px', marginBottom:14, fontSize:12,
             fontWeight:700, color:'#ef4444',
+            display: 'flex', alignItems: 'center', gap: 7,
           }}>
-            ⚠ Session started — you have 10 minutes to join before it expires
+            <AlertTriangle size={15} strokeWidth={2.5} />
+            Session started. You have 10 minutes to join before it expires.
           </div>
         )}
 
@@ -572,13 +681,19 @@ function NextInterviewCard({ interview, isDark, onStart, onCancel }) {
             </div>
           ) : (
             <div style={{ display:'flex', gap:8 }}>
-              <button onClick={onStart} style={{
+              <motion.button
+                onClick={onStart}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                style={{
                 flex:1, padding:'9px 16px', borderRadius:10, border:'none',
                 background: isGrace ? '#ef4444' : '#3b82f6',
                 color:'#fff', fontWeight:700, fontSize:13, cursor:'pointer',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
               }}>
-                🎤 {isGrace ? 'Join Now' : 'Start Early'}
-              </button>
+                <Mic size={15} strokeWidth={2.5} />
+                {isGrace ? 'Join Now' : 'Start Early'}
+              </motion.button>
               <button onClick={() => setConfirmCancel(true)} style={{
                 padding:'9px 14px', borderRadius:10,
                 border:`1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'}`,
@@ -1017,7 +1132,10 @@ function ScheduleModal({ isDark, onClose, onScheduled }) {
         {/* Header + live preview */}
         <div style={{ marginBottom:20 }}>
           <h3 style={{ margin:'0 0 4px', fontSize:18, fontWeight:800, color:head }}>
-            📅 Schedule Interview
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <MotionIcon Icon={Calendar} size={19} color="#f97316" title="Schedule interview" />
+              Schedule Interview
+            </span>
           </h3>
           <p style={{ margin:0, fontSize:12, color: sub, transition:'color 0.15s' }}>
             {previewStr}
@@ -1252,22 +1370,28 @@ export default function DashboardPage() {
               onClick={() => setShowTargetModal(true)}
               style={{ padding:'10px 20px', borderRadius:12, border:'1px solid rgba(239,68,68,0.4)', background:'rgba(239,68,68,0.1)', color:'#f87171', fontWeight:700, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', gap:7 }}
             >
-              <span style={{ fontSize:15 }}>{prescription.primaryWeakness.emoji}</span>
+              <MotionIcon Icon={Target} size={15} color="#f87171" title="Weak area" />
               Fix My Weak Areas
             </motion.button>
           )}
-          <button
+          <motion.button
             onClick={() => setShowSchedule(true)}
-            style={{ padding:'10px 20px', borderRadius:12, border:'1px solid rgba(249,115,22,0.35)', background:'rgba(249,115,22,0.1)', color:'#f97316', fontWeight:700, fontSize:13, cursor:'pointer' }}
+            whileHover={{ scale: 1.03, y: -1 }}
+            whileTap={{ scale: 0.97 }}
+            style={{ padding:'10px 20px', borderRadius:12, border:'1px solid rgba(249,115,22,0.35)', background:'rgba(249,115,22,0.1)', color:'#f97316', fontWeight:700, fontSize:13, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:7 }}
           >
-            📅 Schedule Interview
-          </button>
-          <button
+            <Calendar size={15} strokeWidth={2.5} />
+            Schedule Interview
+          </motion.button>
+          <motion.button
             onClick={() => navigate('/setup')}
-            style={{ padding:'10px 20px', borderRadius:12, border:'none', background:'#f97316', color:'#fff', fontWeight:700, fontSize:13, cursor:'pointer' }}
+            whileHover={{ scale: 1.03, y: -1 }}
+            whileTap={{ scale: 0.97 }}
+            style={{ padding:'10px 20px', borderRadius:12, border:'none', background:'#f97316', color:'#fff', fontWeight:700, fontSize:13, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:7 }}
           >
-            🎯 Start Now
-          </button>
+            <Target size={15} strokeWidth={2.5} />
+            Start Now
+          </motion.button>
         </div>
       </div>
 
@@ -1325,33 +1449,42 @@ export default function DashboardPage() {
           {
             label: 'Total Sessions',
             value: analytics.totalSessions ?? 0,
-            icon: '🎙️',
+            Icon: Mic,
+            iconColor: '#a78bfa',
             iconBg: isDark ? 'rgba(139,92,246,0.15)' : 'rgba(139,92,246,0.1)',
             iconBorder: 'rgba(139,92,246,0.25)',
           },
           {
             label: 'Average Score',
             value: `${analytics.averageScore ?? 0}/10`,
-            icon: '📊',
+            Icon: BarChart3,
+            iconColor: '#60a5fa',
             iconBg: isDark ? 'rgba(59,130,246,0.15)' : 'rgba(59,130,246,0.1)',
             iconBorder: 'rgba(59,130,246,0.25)',
           },
           {
             label: 'Current Streak',
             value: `${streak.currentStreak}d`,
-            icon: '🔥',
+            Icon: Flame,
+            iconColor: '#f97316',
+            burn: streak.currentStreak > 0,
             iconBg: isDark ? 'rgba(249,115,22,0.15)' : 'rgba(249,115,22,0.1)',
             iconBorder: 'rgba(249,115,22,0.25)',
           },
           {
             label: 'Best Streak',
             value: `${streak.longestStreak}d`,
-            icon: '🏆',
+            Icon: Trophy,
+            iconColor: '#eab308',
             iconBg: isDark ? 'rgba(234,179,8,0.15)' : 'rgba(234,179,8,0.1)',
             iconBorder: 'rgba(234,179,8,0.25)',
           },
         ].map((stat, i) => (
-          <div key={i} style={{
+          <motion.div
+            key={i}
+            whileHover={{ y: -3, scale: 1.01 }}
+            transition={{ type: 'spring', stiffness: 280, damping: 20 }}
+            style={{
             background: cardBg,
             border: `1px solid ${cardBorder}`,
             borderRadius: 16,
@@ -1373,7 +1506,13 @@ export default function DashboardPage() {
               fontSize: 20,
               flexShrink: 0,
             }}>
-              {stat.icon}
+              <MotionIcon
+                Icon={stat.Icon}
+                size={22}
+                color={stat.iconColor}
+                burn={stat.burn}
+                title={stat.label}
+              />
             </div>
 
             {/* Text content */}
@@ -1397,7 +1536,7 @@ export default function DashboardPage() {
                 {stat.label}
               </p>
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
 
@@ -1408,7 +1547,10 @@ export default function DashboardPage() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: headColor }}>📊 Practice Activity</h3>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: headColor, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <MotionIcon Icon={BarChart3} size={18} color="#60a5fa" title="Practice activity" />
+              Practice Activity
+            </h3>
             <p style={{ margin: '3px 0 0', fontSize: 12, color: subColor }}>
               {heatmap.reduce((sum, d) => sum + d.count, 0)} sessions in the last year
             </p>
@@ -1418,8 +1560,10 @@ export default function DashboardPage() {
               padding: '6px 14px', borderRadius: 99,
               background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.25)',
               fontSize: 12, fontWeight: 700, color: '#f97316',
+              display: 'inline-flex', alignItems: 'center', gap: 6,
             }}>
-              🔥 {streak.currentStreak} day streak
+              <MotionIcon Icon={Flame} size={14} color="#f97316" burn title="Current streak" />
+              {streak.currentStreak} day streak
             </div>
           )}
         </div>
@@ -1455,7 +1599,7 @@ export default function DashboardPage() {
 
             {[
               {
-                icon: '🎙️',
+                Icon: Mic,
                 iconBg: isDark ? 'rgba(139,92,246,0.12)' : 'rgba(139,92,246,0.08)',
                 iconBorder: 'rgba(139,92,246,0.2)',
                 value: `${analytics.totalSessions ?? 0}`,
@@ -1463,7 +1607,7 @@ export default function DashboardPage() {
                 valueColor: '#a78bfa',
               },
               {
-                icon: '📊',
+                Icon: BarChart3,
                 iconBg: isDark ? 'rgba(59,130,246,0.12)' : 'rgba(59,130,246,0.08)',
                 iconBorder: 'rgba(59,130,246,0.2)',
                 value: (analytics.averageScore ?? 0) > 0
@@ -1473,7 +1617,8 @@ export default function DashboardPage() {
                 valueColor: '#60a5fa',
               },
               {
-                icon: '🔥',
+                Icon: Flame,
+                burn: streak.currentStreak > 0,
                 iconBg: isDark ? 'rgba(249,115,22,0.12)' : 'rgba(249,115,22,0.08)',
                 iconBorder: 'rgba(249,115,22,0.2)',
                 value: `${streak.currentStreak}d`,
@@ -1488,7 +1633,15 @@ export default function DashboardPage() {
                   border: `1px solid ${item.iconBorder}`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 13, flexShrink: 0,
-                }}>{item.icon}</div>
+                }}>
+                  <MotionIcon
+                    Icon={item.Icon}
+                    size={15}
+                    color={item.valueColor}
+                    burn={item.burn}
+                    title={item.label}
+                  />
+                </div>
                 <div>
                   <p style={{
                     margin: 0,
@@ -1545,8 +1698,10 @@ export default function DashboardPage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
               {recentSessions.map((s, i) => (
-                <div
+                <motion.div
                   key={s.id}
+                  whileHover={{ x: 3 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 24 }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 14,
                     padding: '12px 0',
@@ -1561,7 +1716,30 @@ export default function DashboardPage() {
                     background: s.score >= 7 ? 'rgba(34,197,94,0.12)' : s.score ? 'rgba(245,158,11,0.12)' : 'rgba(99,102,241,0.12)',
                     fontSize: 16, flexShrink: 0,
                   }}>
-                    {s.status === 'SCHEDULED' ? '📅' : s.score >= 7 ? '✅' : s.score ? '📝' : '🎙️'}
+                    {(() => {
+                      const SessionIcon = s.status === 'SCHEDULED'
+                        ? Calendar
+                        : s.score >= 7
+                          ? CheckCircle2
+                          : s.score
+                            ? FileText
+                            : Mic;
+                      const iconColor = s.status === 'SCHEDULED'
+                        ? '#60a5fa'
+                        : s.score >= 7
+                          ? '#22c55e'
+                          : s.score
+                            ? '#f59e0b'
+                            : '#818cf8';
+                      return (
+                        <MotionIcon
+                          Icon={SessionIcon}
+                          size={17}
+                          color={iconColor}
+                          title={s.status === 'SCHEDULED' ? 'Scheduled session' : 'Interview session'}
+                        />
+                      );
+                    })()}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: headColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1590,7 +1768,7 @@ export default function DashboardPage() {
                       </span>
                     )}
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           )}
@@ -1603,14 +1781,16 @@ export default function DashboardPage() {
             <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 800, color: headColor }}>Quick Actions</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
               {[
-                { label: '🎯 Start Interview', onClick: () => navigate('/setup'), primary: true },
-                { label: '📅 Schedule', onClick: () => setShowSchedule(true) },
-                { label: '📚 Resources', onClick: () => navigate('/resources') },
-                { label: '📈 Analytics', onClick: () => navigate('/analytics') },
-              ].map(({ label, onClick, primary }, i) => (
-                <button
+                { label: 'Start Interview', Icon: Target, onClick: () => navigate('/setup'), primary: true },
+                { label: 'Schedule', Icon: Calendar, onClick: () => setShowSchedule(true) },
+                { label: 'Resources', Icon: BookOpen, onClick: () => navigate('/resources') },
+                { label: 'Analytics', Icon: TrendingUp, onClick: () => navigate('/analytics') },
+              ].map(({ label, Icon, onClick, primary }, i) => (
+                <motion.button
                   key={i}
                   onClick={onClick}
+                  whileHover={{ x: 4, scale: 1.01 }}
+                  whileTap={{ scale: 0.98 }}
                   style={{
                     width: '100%', padding: '12px 16px', borderRadius: 10,
                     border: primary ? 'none' : `1px solid ${cardBorder}`,
@@ -1618,13 +1798,15 @@ export default function DashboardPage() {
                     color: primary ? '#fff' : headColor,
                     fontWeight: 600, fontSize: 13, cursor: 'pointer',
                     textAlign: 'left', flex: 1,
+                    display: 'flex', alignItems: 'center', gap: 9,
                     transition: 'all 0.15s',
                   }}
-                  onMouseEnter={e => { if (!primary) e.target.style.background = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'; }}
-                  onMouseLeave={e => { if (!primary) e.target.style.background = 'transparent'; }}
+                  onMouseEnter={e => { if (!primary) e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'; }}
+                  onMouseLeave={e => { if (!primary) e.currentTarget.style.background = 'transparent'; }}
                 >
+                  <Icon size={16} strokeWidth={2.5} />
                   {label}
-                </button>
+                </motion.button>
               ))}
             </div>
           </div>
