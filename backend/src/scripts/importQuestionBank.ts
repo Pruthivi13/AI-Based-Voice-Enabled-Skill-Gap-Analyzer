@@ -105,7 +105,7 @@ async function main() {
           category: mapCategory(categoryRaw),
           difficulty: mapDifficulty(difficultyRaw),
           role: role?.trim() || null,
-          hints: hints.length > 0 ? hints : null,
+          hints: hints.length > 0 ? hints : undefined,
           timeLimitSeconds: parseInt(timeLimitRaw) || 120,
           isActive: true,
         },

@@ -8,9 +8,7 @@ import { logger } from '../utils/logger';
 
 // ── pg-boss uses your existing DATABASE_URL ───────────────────────────────────
 
-const boss = new PgBoss({
-  connectionString: process.env.DATABASE_URL!,
-});
+const boss = new PgBoss(process.env.DATABASE_URL!);
 
 boss.on('error', (err) => logger.error('pg-boss error:', err));
 

@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
+import { Brain, Save } from 'lucide-react';
 import {
   finishSession,
   getToken,
@@ -571,8 +572,8 @@ export default function LiveInterviewPage() {
           )}
         </div>
       ) : !showFollowup ? (
-        <div className="text-white/60 text-sm animate-pulse text-center">
-          {status === 'Transcribing' ? '🧠 Transcribing...' : '📤 Saving...'}
+        <div className="text-white/60 text-sm animate-pulse text-center flex items-center justify-center gap-2">
+          {status === 'Transcribing' ? <><Brain size={16} /> Transcribing...</> : <><Save size={16} /> Saving...</>}
         </div>
       ) : null}
 

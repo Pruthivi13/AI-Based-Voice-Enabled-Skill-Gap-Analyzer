@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
-import pdfParse from 'pdf-parse';
+import pdfParse = require('pdf-parse');
 
 const mlClient = axios.create({
   baseURL: env.ML_SERVICE_URL,

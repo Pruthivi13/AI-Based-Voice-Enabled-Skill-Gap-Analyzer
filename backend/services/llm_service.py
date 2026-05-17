@@ -174,6 +174,11 @@ Ideal answer, if available:
 Candidate transcript:
 {transcript}
 
+Strict scoring rules:
+- If the transcript is empty, skipped, nonsensical, unrelated to the question, or fewer than 10 words with no expected terms, score relevance <= 2, correctness <= 1, completeness <= 1, and clarity <= 3.
+- Do not reward confident wording, fluent delivery, or grammatical phrasing when the answer does not address the expected concepts.
+- For technical questions, correctness and completeness must be based on covered technical facts, not answer length or tone.
+
 Return JSON only with exactly these fields:
 {{
   "keywords_found": ["terms from expected keywords or transcript"],
@@ -355,6 +360,13 @@ def _heuristic_evaluation(
     keyword_coverage = len(found_keywords) / max(len(expected_keywords), 1)
     point_coverage = len(found_points) / max(len(expected_key_points), 1)
     coverage = max(keyword_coverage, point_coverage * 0.9)
+    has_reference_signal = bool(found_keywords or found_points)
+    explicit_non_answer = bool(
+        re.search(
+            r"\b(i do not know|i don'?t know|no idea|not sure|i have no answer|skip|no speech detected)\b",
+            transcript.lower(),
+        )
+    )
 
     length_bonus = min(word_count / 80, 1.0)
     relevance = _score(3.0 + coverage * 6.0 + length_bonus)
@@ -362,6 +374,16 @@ def _heuristic_evaluation(
     completeness = _score(coverage * 10.0)
     clarity = _score(6.0 + min(word_count / 60, 2.0))
     if word_count < 10:
+        clarity = min(clarity, 4.0)
+    if explicit_non_answer or (word_count < 8 and not has_reference_signal):
+        relevance = min(relevance, 2.0)
+        correctness = min(correctness, 1.0)
+        completeness = min(completeness, 1.0)
+        clarity = min(clarity, 3.0)
+    elif word_count < 16 and not has_reference_signal and coverage <= 0:
+        relevance = min(relevance, 3.0)
+        correctness = min(correctness, 2.0)
+        completeness = min(completeness, 1.5)
         clarity = min(clarity, 4.0)
 
     strengths = []

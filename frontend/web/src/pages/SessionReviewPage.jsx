@@ -13,6 +13,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchSessionReview, fetchSessionRoadmap, fetchFeedbackStats } from '../services/api';
 import RoadmapSection from '../components/RoadmapSection';
+import RoadmapErrorBoundary from '../components/RoadmapErrorBoundary';
 import CourseRecommendations from '../components/CourseRecommendations';
 import StatusChip from '../components/StatusChip';
 import LoadingState from '../components/LoadingState';
@@ -37,7 +38,7 @@ function CommunityDifficultyBadge({ questionId }) {
   const pcts = stats.percentages || {};
   const dominant =
     pcts.tooEasy > 50 ? { label: 'Mostly found Easy', color: '#34d399', emoji: '😴' }
-    : pcts.tooHard > 50 ? { label: 'Mostly found Hard', color: '#f87171', emoji: '🔥' }
+    : pcts.tooHard > 50 ? { label: 'Mostly found Hard', color: '#f87171', emoji: <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif" alt="🔥" style={{ width: '1em', height: '1em', verticalAlign: '-0.15em' }} /> }
     : { label: 'Balanced difficulty', color: '#f97316', emoji: '🎯' };
 
   return (
@@ -262,12 +263,14 @@ export default function SessionReviewPage() {
       {!roadmapLoading && roadmap && (
         <section className="mt-10">
           <h2 className="mb-4">Learning Roadmap</h2>
-          <RoadmapSection
-            nodes={roadmap.nodes}
-            edges={roadmap.edges}
-            targetRole={roadmap.targetRole}
-            roadmapId={`${roadmap.targetRole}-${id}`.replace(/\s+/g, '-').toLowerCase()}
-          />
+          <RoadmapErrorBoundary>
+            <RoadmapSection
+              nodes={roadmap.nodes}
+              edges={roadmap.edges}
+              targetRole={roadmap.targetRole}
+              roadmapId={`${roadmap.targetRole}-${id}`.replace(/\s+/g, '-').toLowerCase()}
+            />
+          </RoadmapErrorBoundary>
         </section>
       )}
 

@@ -13,6 +13,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Wind, Mic, CheckCircle2, ArrowRight,
   SkipForward, Sparkles, MicOff,
+  Lightbulb, Activity, MessageCircle,
+  Brain, Target, Timer, Sprout, Zap,
 } from 'lucide-react';
 import WarmupBreathingRing from '../components/WarmupBreathingRing';
 import WarmupReadyMeter from '../components/WarmupReadyMeter';
@@ -32,24 +34,24 @@ const slideVariants = {
 };
 
 const TIPS = [
-  { emoji: '🎙️', text: 'Speak at your normal pace — no need to rush' },
-  { emoji: '💡', text: 'This question is NOT scored — just get comfortable' },
-  { emoji: '🧘', text: 'A short breathing exercise will calm your nerves' },
-  { emoji: '✅', text: 'Your mic will be checked before the real interview' },
+  { Icon: Mic, color: '#f97316', text: 'Speak at your normal pace — no need to rush' },
+  { Icon: Lightbulb, color: '#facc15', text: 'This question is NOT scored — just get comfortable' },
+  { Icon: Activity, color: '#a78bfa', text: 'A short breathing exercise will calm your nerves' },
+  { Icon: CheckCircle2, color: '#34d399', text: 'Your mic will be checked before the real interview' },
 ];
 
 function ConfidenceLabel({ level }) {
   const map = {
-    low:    { label: 'Building…',     color: '#fb923c', emoji: '🌱' },
-    medium: { label: 'Getting there', color: '#f97316', emoji: '🔥' },
-    high:   { label: 'Feeling good!', color: '#34d399', emoji: '⚡' },
+    low:    { label: 'Building…',     color: '#fb923c', Icon: Sprout },
+    medium: { label: 'Getting there', color: '#f97316', Icon: () => <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif" alt="fire" style={{ width: '1em', height: '1em', verticalAlign: '-0.15em' }} /> },
+    high:   { label: 'Feeling good!', color: '#34d399', Icon: Zap },
   };
   const m = map[level] || map.medium;
   return (
     <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
       style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 99,
         background: `${m.color}15`, border: `1px solid ${m.color}30` }}>
-      <span>{m.emoji}</span>
+      <m.Icon size={16} style={{ color: m.color }} />
       <span style={{ color: m.color, fontSize: 13, fontWeight: 700 }}>{m.label}</span>
     </motion.div>
   );
@@ -169,8 +171,8 @@ export default function WarmupPage() {
             </motion.div>
             <div>
               <motion.h2 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-                style={{ fontSize: 26, fontWeight: 800, color: '#fff', marginBottom: 8 }}>
-                Let's warm up first 🎙️
+                style={{ fontSize: 26, fontWeight: 800, color: '#fff', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                Let's warm up first <Mic size={24} style={{ color: '#f97316' }} />
               </motion.h2>
               <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
                 style={{ color: 'rgba(255,255,255,0.55)', fontSize: 14, lineHeight: 1.6 }}>
@@ -183,7 +185,7 @@ export default function WarmupPage() {
                   transition={{ delay: 0.25 + i * 0.08 }}
                   style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderRadius: 16, textAlign: 'left',
                     background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                  <span style={{ fontSize: 20 }}>{tip.emoji}</span>
+                  <tip.Icon size={18} style={{ color: tip.color, flexShrink: 0 }} strokeWidth={2.2} />
                   <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: 13 }}>{tip.text}</span>
                 </motion.div>
               ))}
@@ -237,18 +239,20 @@ export default function WarmupPage() {
                   background: 'linear-gradient(135deg, rgba(249,115,22,0.1), rgba(249,115,22,0.03))',
                   border: '1.5px solid rgba(249,115,22,0.25)', boxShadow: '0 0 30px rgba(249,115,22,0.1)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                  <span style={{ fontSize: 18 }}>💬</span>
+                  <MessageCircle size={18} style={{ color: '#fb923c' }} />
                   <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fb923c' }}>Warmup Question</span>
                 </div>
                 <p style={{ fontSize: 20, fontWeight: 700, color: '#fff', lineHeight: 1.4, marginBottom: 12 }}>"{warmupQ.content}"</p>
-                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', margin: 0 }}>💡 {warmupQ.prompt}</p>
+                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Lightbulb size={13} style={{ color: 'rgba(255,255,255,0.35)' }} /> {warmupQ.prompt}
+                </p>
               </motion.div>
             )}
 
             {isRecording && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, color: timeLeft <= 15 ? '#f87171' : 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: 600 }}>
-                ⏱ {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')} remaining
+                <Timer size={14} /> {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')} remaining
               </motion.div>
             )}
 
@@ -300,8 +304,9 @@ export default function WarmupPage() {
                 <CheckCircle2 size={54} style={{ color: '#34d399' }} />
               </motion.div>
             </motion.div>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
-              style={{ fontSize: 40 }}>🎉</motion.div>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
+              <Sparkles size={40} style={{ color: '#facc15' }} />
+            </motion.div>
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
               <h2 style={{ fontSize: 30, fontWeight: 800, color: '#fff', marginBottom: 12 }}>You're warmed up!</h2>
               <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 15, lineHeight: 1.7 }}>
@@ -312,13 +317,13 @@ export default function WarmupPage() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}
               style={{ width: '100%', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               {[
-                { icon: '🧠', label: 'Mind', value: 'Focused' },
-                { icon: '🫁', label: 'Breath', value: 'Steady' },
-                { icon: '🎙️', label: 'Voice', value: 'Ready' },
-              ].map(({ icon, label, value }) => (
+                { Icon: Brain, label: 'Mind', value: 'Focused', color: '#a78bfa' },
+                { Icon: Wind, label: 'Breath', value: 'Steady', color: '#38bdf8' },
+                { Icon: Mic, label: 'Voice', value: 'Ready', color: '#f97316' },
+              ].map(({ Icon, label, value, color }) => (
                 <div key={label} style={{ borderRadius: 16, padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
                   background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.2)' }}>
-                  <span style={{ fontSize: 24 }}>{icon}</span>
+                  <Icon size={24} style={{ color }} />
                   <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)' }}>{label}</span>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#34d399' }}>{value}</span>
                 </div>
@@ -329,7 +334,7 @@ export default function WarmupPage() {
               style={{ width: '100%', padding: '16px 24px', borderRadius: 16, border: 'none', color: '#fff', fontWeight: 700, fontSize: 18,
                 cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
                 background: 'linear-gradient(135deg, #f97316, #ea6a0a)', boxShadow: '0 10px 30px rgba(249,115,22,0.35)' }}>
-              🎯 Start Real Interview <ArrowRight size={20} />
+              <Target size={20} /> Start Real Interview <ArrowRight size={20} />
             </motion.button>
           </div>
         );

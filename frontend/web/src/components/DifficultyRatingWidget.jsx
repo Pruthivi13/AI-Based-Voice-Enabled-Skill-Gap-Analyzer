@@ -39,7 +39,7 @@ const OPTIONS = [
   },
   {
     key:   'TOO_HARD',
-    emoji: '🔥',
+    emoji: <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif" alt="🔥" style={{ width: '1em', height: '1em', verticalAlign: '-0.15em' }} />,
     label: 'Too Hard',
     short: 'Hard',
     color: '#f87171',

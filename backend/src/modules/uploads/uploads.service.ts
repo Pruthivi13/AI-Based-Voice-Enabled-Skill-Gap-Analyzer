@@ -5,6 +5,60 @@ import { transcribeAudio } from '../../services/mlClient.service';
 import { logger } from '../../utils/logger';
 import path from 'path';
 
+const audioExtension = (file: Express.Multer.File) => {
+  const originalExtension = path.extname(file.originalname || '').toLowerCase();
+  if (originalExtension) return originalExtension;
+
+  if (file.mimetype === 'audio/wav') return '.wav';
+  if (file.mimetype === 'audio/mpeg') return '.mp3';
+  if (file.mimetype === 'audio/mp4') return '.mp4';
+  if (file.mimetype === 'audio/ogg') return '.ogg';
+  return '.webm';
+};
+
+const storeAudio = async (
+  userId: string,
+  sessionId: string,
+  questionId: string,
+  file: Express.Multer.File
+) => {
+  const fileName = `${userId}/${sessionId}/${questionId}_${Date.now()}${audioExtension(file)}`;
+
+  const { error } = await supabase.storage
+    .from('audio-uploads')
+    .upload(fileName, file.buffer, {
+      contentType: file.mimetype,
+      upsert: true,
+    });
+
+  if (error) {
+    logger.error(
+      `Supabase audio upload failed for question ${questionId}: ${error.message}`
+    );
+    throw new ApiError('UPLOAD_FAILED', error.message, 500);
+  }
+
+  const { data: signedData, error: signedError } = await supabase.storage
+    .from('audio-uploads')
+    .createSignedUrl(fileName, 86400);
+
+  if (signedError || !signedData?.signedUrl) {
+    const message =
+      signedError?.message ?? 'Supabase did not return a signed audio URL.';
+    logger.error(
+      `Supabase signed URL failed for question ${questionId}: ${
+        signedError?.message ?? 'missing signed URL'
+      }`
+    );
+    throw new ApiError('URL_FAILED', message, 500);
+  }
+
+  return {
+    fileUrl: signedData.signedUrl,
+    storagePath: fileName,
+  };
+};
+
 export const uploadAudio = async (
   userId: string,
   sessionId: string,
@@ -25,27 +79,15 @@ export const uploadAudio = async (
   });
   if (!question) throw new ApiError('NOT_FOUND', 'Question not found.', 404);
 
-  // Upload to Supabase Storage
-  const fileName = `${userId}/${sessionId}/${questionId}_${Date.now()}${path.extname(file.originalname) || '.webm'}`;
-
-  const { data, error } = await supabase.storage
-    .from('audio-uploads')
-    .upload(fileName, file.buffer, {
-      contentType: file.mimetype,
-      upsert: true,
-    });
-
-  if (error) throw new ApiError('UPLOAD_FAILED', error.message, 500);
-
-  // Get signed URL (valid for 24 hours) instead of public URL.
-  const { data: signedData, error: signedError } = await supabase.storage
-    .from('audio-uploads')
-    .createSignedUrl(fileName, 86400);
-
-  if (signedError) throw new ApiError('URL_FAILED', signedError.message, 500);
-
-  const fileUrl = signedData.signedUrl;
-  const storagePath = fileName;
+  const { fileUrl, storagePath } = await storeAudio(
+    userId,
+    sessionId,
+    questionId,
+    file
+  );
+  logger.info(
+    `Audio stored for question ${questionId} in Supabase storage.`
+  );
 
   const response = await prisma.response.upsert({
     where: { sessionId_questionId: { sessionId, questionId } },

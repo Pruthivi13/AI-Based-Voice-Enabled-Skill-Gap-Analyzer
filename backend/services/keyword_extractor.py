@@ -113,6 +113,37 @@ def _fuzzy_similarity(phrase: str, transcript: str) -> float:
     return float(fuzz.token_set_ratio(normalized_phrase, normalized_transcript))
 
 
+NEGATION_WORDS = {
+    "not",
+    "never",
+    "no",
+    "isn't",
+    "isnt",
+    "doesn't",
+    "doesnt",
+    "don't",
+    "dont",
+    "cannot",
+    "can't",
+    "cant",
+    "without",
+}
+
+
+def _has_negation_near_phrase(phrase: str, transcript: str) -> bool:
+    phrase_tokens = set(_concept_tokens(phrase))
+    words = [
+        word.strip(".,;:!?()[]{}\"'").lower()
+        for word in transcript.split()
+    ]
+    for i, word in enumerate(words):
+        if _canonical_token(word) in phrase_tokens:
+            window = words[max(0, i - 3):i + 1]
+            if any(neg in window for neg in NEGATION_WORDS):
+                return True
+    return False
+
+
 def _phrase_match_details(
     phrase: str,
     transcript: str,
@@ -123,22 +154,28 @@ def _phrase_match_details(
     if not normalized_phrase:
         return {"matched": False, "method": "empty", "score": 0.0}
 
+    # Negation guard: penalize score if there's a negation word right near the matched concept
+    has_negation = _has_negation_near_phrase(normalized_phrase, normalized_transcript)
+    negation_penalty = 1.0 if not has_negation else 0.4
+
     # Exact phrase match first.
     if re.search(rf"(?<![a-z0-9]){re.escape(normalized_phrase)}(?![a-z0-9])", normalized_transcript):
-        return {"matched": True, "method": "exact_phrase", "score": 100.0}
+        score = 100.0 * negation_penalty
+        return {"matched": score >= 80.0, "method": "exact_phrase", "score": score}
 
     # Then a forgiving all-token check for short concept phrases.
     phrase_tokens = _concept_tokens(normalized_phrase)
     transcript_tokens = set(_concept_tokens(normalized_transcript))
     if bool(phrase_tokens) and all(token in transcript_tokens for token in phrase_tokens):
-        return {"matched": True, "method": "all_tokens", "score": 92.0}
+        score = 92.0 * negation_penalty
+        return {"matched": score >= 80.0, "method": "all_tokens", "score": score}
 
     threshold = (
         fuzzy_threshold
         if fuzzy_threshold is not None
         else float(os.getenv("KEYWORD_FUZZY_THRESHOLD", "86"))
     )
-    fuzzy_score = _fuzzy_similarity(normalized_phrase, normalized_transcript)
+    fuzzy_score = _fuzzy_similarity(normalized_phrase, normalized_transcript) * negation_penalty
     return {
         "matched": fuzzy_score >= threshold,
         "method": "rapidfuzz" if fuzzy_score else "none",

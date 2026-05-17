@@ -28,6 +28,7 @@ export interface WeakSkill {
   urgency: 'critical' | 'high' | 'medium';
   message: string;
   emoji: string;
+  icon: string;
   suggestedInterviewType: 'TECHNICAL' | 'HR' | 'COMMUNICATION' | 'MIXED';
   suggestedFocusPrompt: string;
 }
@@ -54,16 +55,17 @@ const SESSIONS_TO_SCAN = 5;
 const SKILL_META: Record<SkillKey, {
   label: string;
   emoji: string;
+  icon: string;
   interviewType: 'TECHNICAL' | 'HR' | 'COMMUNICATION' | 'MIXED';
   focusPrompt: string;
 }> = {
-  technicalScore:  { label: 'Technical Depth', emoji: '⚙️',  interviewType: 'TECHNICAL',    focusPrompt: 'Focus on explaining technical concepts clearly with examples' },
-  confidenceScore: { label: 'Confidence',       emoji: '💪',  interviewType: 'HR',           focusPrompt: 'Use assertive language; avoid hedging phrases like "I think maybe"' },
-  clarityScore:    { label: 'Clarity',           emoji: '🎯',  interviewType: 'COMMUNICATION', focusPrompt: 'Structure answers with a clear beginning, middle, and end' },
-  fluencyScore:    { label: 'Fluency',           emoji: '🗣️', interviewType: 'COMMUNICATION', focusPrompt: 'Speak at a measured pace; reduce filler words like "um" and "uh"' },
-  grammarScore:    { label: 'Grammar',           emoji: '📝',  interviewType: 'COMMUNICATION', focusPrompt: 'Use complete sentences and avoid run-on responses' },
-  relevanceScore:  { label: 'Relevance',         emoji: '🎯',  interviewType: 'MIXED',        focusPrompt: 'Stay on topic; directly answer what is asked before elaborating' },
-  overallScore:    { label: 'Overall',           emoji: '📊',  interviewType: 'MIXED',        focusPrompt: 'Focus on balanced improvement across all areas' },
+  technicalScore:  { label: 'Technical Depth', emoji: '⚙️',  icon: 'Settings',     interviewType: 'TECHNICAL',    focusPrompt: 'Focus on explaining technical concepts clearly with examples' },
+  confidenceScore: { label: 'Confidence',       emoji: '💪',  icon: 'Shield',       interviewType: 'HR',           focusPrompt: 'Use assertive language; avoid hedging phrases like "I think maybe"' },
+  clarityScore:    { label: 'Clarity',           emoji: '🎯',  icon: 'Target',       interviewType: 'COMMUNICATION', focusPrompt: 'Structure answers with a clear beginning, middle, and end' },
+  fluencyScore:    { label: 'Fluency',           emoji: '🗣️', icon: 'AudioLines',   interviewType: 'COMMUNICATION', focusPrompt: 'Speak at a measured pace; reduce filler words like "um" and "uh"' },
+  grammarScore:    { label: 'Grammar',           emoji: '📝',  icon: 'PenLine',      interviewType: 'COMMUNICATION', focusPrompt: 'Use complete sentences and avoid run-on responses' },
+  relevanceScore:  { label: 'Relevance',         emoji: '🎯',  icon: 'Crosshair',    interviewType: 'MIXED',        focusPrompt: 'Stay on topic; directly answer what is asked before elaborating' },
+  overallScore:    { label: 'Overall',           emoji: '📊',  icon: 'BarChart2',    interviewType: 'MIXED',        focusPrompt: 'Focus on balanced improvement across all areas' },
 };
 
 function computeTrend(scores: (number | null)[]): 'declining' | 'flat' | 'improving' {
@@ -126,7 +128,7 @@ export async function analyzeWeakSkills(userId: string): Promise<TargetedPrescri
       const meta  = SKILL_META[key];
       const { urgency, message } = buildUrgencyMessage(meta.label, consecutive, avg, trend);
 
-      weakSkills.push({ key, label: meta.label, avgScore: parseFloat(avg.toFixed(2)), consecutiveWeakSessions: consecutive, trend, urgency, message, emoji: meta.emoji, suggestedInterviewType: meta.interviewType, suggestedFocusPrompt: meta.focusPrompt });
+      weakSkills.push({ key, label: meta.label, avgScore: parseFloat(avg.toFixed(2)), consecutiveWeakSessions: consecutive, trend, urgency, message, emoji: meta.emoji, icon: meta.icon, suggestedInterviewType: meta.interviewType, suggestedFocusPrompt: meta.focusPrompt });
     }
 
     weakSkills.sort((a, b) => {
@@ -151,7 +153,7 @@ export async function analyzeWeakSkills(userId: string): Promise<TargetedPrescri
         targetRole: role,
         focusAreas: topTwo.map(w => w.label),
         prescriptionTitle: `Fix your ${primaryWeakness.label}`,
-        prescriptionSubtitle: topTwo.map(w => `${w.emoji} ${w.label} (${w.avgScore.toFixed(1)}/10)`).join('  ·  '),
+        prescriptionSubtitle: topTwo.map(w => `${w.label} (${w.avgScore.toFixed(1)}/10)`).join('  ·  '),
       };
     }
 

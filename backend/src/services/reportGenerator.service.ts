@@ -45,7 +45,7 @@ export const generateReport = async (sessionId: string) => {
           'Fluency',
         ],
         values: [
-          avg(analyses.map((a) => a.clarityScore)),
+          avg(analyses.map((a) => a.relevanceScore)),
           avg(analyses.map((a) => a.confidenceScore)),
           avg(analyses.map((a) => a.technicalScore)),
           avg(analyses.map((a) => a.clarityScore)),
@@ -74,7 +74,7 @@ export const generateReport = async (sessionId: string) => {
           'Fluency',
         ],
         values: [
-          avg(analyses.map((a) => a.clarityScore)),
+          avg(analyses.map((a) => a.relevanceScore)),
           avg(analyses.map((a) => a.confidenceScore)),
           avg(analyses.map((a) => a.technicalScore)),
           avg(analyses.map((a) => a.clarityScore)),

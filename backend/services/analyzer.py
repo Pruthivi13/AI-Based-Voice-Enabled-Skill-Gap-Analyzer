@@ -191,13 +191,14 @@ def _pipeline_to_legacy_analysis(response_id: str, final_result: dict[str, Any])
     completeness = _numeric(content.get("completeness"), 0.0) or 0.0
     technical = round((correctness + completeness) / 2, 1)
     wpm = _numeric(audio.get("words_per_minute"))
-    has_audio_wpm = bool(audio.get("audio_available")) and wpm is not None and wpm > 0
+    has_audio = bool(audio.get("audio_available"))
+    has_audio_wpm = has_audio and wpm is not None and wpm > 0
 
     feedback = [
         final_result.get("feedback"),
         *list(final_result.get("improvements", [])),
     ]
-    if audio.get("audio_available"):
+    if has_audio:
         if has_audio_wpm:
             feedback.append(f"Speaking speed: {round(wpm or 0)} WPM from recorded audio.")
         if audio.get("pause_count") is not None:
@@ -213,11 +214,11 @@ def _pipeline_to_legacy_analysis(response_id: str, final_result: dict[str, Any])
     return {
         "responseId": response_id,
         "clarityScore": content.get("clarity"),
-        "fluencyScore": delivery.get("fluency"),
-        "confidenceScore": delivery.get("confidence_cues"),
+        "fluencyScore": delivery.get("fluency") if has_audio else None,
+        "confidenceScore": delivery.get("confidence_cues") if has_audio else None,
         "relevanceScore": content.get("relevance"),
-        "grammarScore": content.get("clarity"),
-        "pronunciationScore": delivery.get("voice_quality") or delivery.get("delivery"),
+        "grammarScore": content.get("correctness"),
+        "pronunciationScore": delivery.get("articulation") if has_audio else None,
         "technicalScore": technical,
         "fillerWordCount": audio.get("filler_count"),
         "speechRateWpm": round(wpm) if has_audio_wpm else None,

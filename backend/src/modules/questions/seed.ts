@@ -304,15 +304,102 @@ const questions = [
     timeLimitSeconds: 300,
     role: 'Frontend Developer',
   },
+
+  // ── Data Scientist ──
+  {
+    content: 'What is the difference between supervised and unsupervised learning?',
+    category: 'TECHNICAL' as const,
+    difficulty: 'EASY' as const,
+    timeLimitSeconds: 120,
+    role: 'Data Scientist',
+  },
+  {
+    content: 'Explain overfitting and how you would prevent it.',
+    category: 'TECHNICAL' as const,
+    difficulty: 'MEDIUM' as const,
+    timeLimitSeconds: 180,
+    role: 'Data Scientist',
+  },
+  {
+    content: 'Walk me through how you would approach a class imbalance problem.',
+    category: 'TECHNICAL' as const,
+    difficulty: 'HARD' as const,
+    timeLimitSeconds: 300,
+    role: 'Data Scientist',
+  },
+
+  // ── Backend Developer ──
+  {
+    content: 'What is the difference between SQL and NoSQL databases?',
+    category: 'TECHNICAL' as const,
+    difficulty: 'EASY' as const,
+    timeLimitSeconds: 120,
+    role: 'Backend Developer',
+  },
+  {
+    content: 'How would you design a rate limiter for an API?',
+    category: 'TECHNICAL' as const,
+    difficulty: 'HARD' as const,
+    timeLimitSeconds: 300,
+    role: 'Backend Developer',
+  },
+  {
+    content: 'Explain the difference between authentication and authorization.',
+    category: 'TECHNICAL' as const,
+    difficulty: 'EASY' as const,
+    timeLimitSeconds: 120,
+    role: 'Backend Developer',
+  },
+
+  // ── DevOps Engineer ──
+  {
+    content: 'What is the difference between containers and virtual machines?',
+    category: 'TECHNICAL' as const,
+    difficulty: 'EASY' as const,
+    timeLimitSeconds: 120,
+    role: 'DevOps Engineer',
+  },
+  {
+    content: 'Explain a CI/CD pipeline you have set up and the tools you used.',
+    category: 'TECHNICAL' as const,
+    difficulty: 'MEDIUM' as const,
+    timeLimitSeconds: 180,
+    role: 'DevOps Engineer',
+  },
+
+  // ── Product Manager ──
+  {
+    content: 'How do you prioritize features when you have limited engineering resources?',
+    category: 'HR' as const,
+    difficulty: 'MEDIUM' as const,
+    timeLimitSeconds: 180,
+    role: 'Product Manager',
+  },
+  {
+    content: 'Describe a product you improved. What metrics did you use to measure success?',
+    category: 'HR' as const,
+    difficulty: 'HARD' as const,
+    timeLimitSeconds: 240,
+    role: 'Product Manager',
+  },
 ];
 
 export const seedQuestions = async () => {
   const count = await prisma.question.count();
   if (count > 0) {
-    console.log('Questions already seeded, skipping...');
-    return;
+    // Still seed role-specific questions if they don't exist yet
+    const roleSpecificCount = await prisma.question.count({
+      where: { role: { not: null } },
+    });
+    if (roleSpecificCount >= 10) {
+      console.log('Questions already seeded, skipping...');
+      return;
+    }
   }
 
-  await prisma.question.createMany({ data: questions });
+  await prisma.question.createMany({
+    data: questions,
+    skipDuplicates: true,
+  });
   console.log(`✅ Seeded ${questions.length} questions`);
 };

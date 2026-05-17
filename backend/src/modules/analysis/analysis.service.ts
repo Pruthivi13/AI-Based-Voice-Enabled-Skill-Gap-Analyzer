@@ -8,6 +8,7 @@ import {
 import { logger } from '../../utils/logger';
 import { updateStreak } from '../../services/streak.service';
 import { captureSkillSnapshot } from '../../services/skillSnapshot.service';
+import { buildEvaluationRubric } from '../../utils/questionRubric';
 
 const SIGNED_AUDIO_URL_TTL_SECONDS = 86400;
 
@@ -18,11 +19,21 @@ const getRatingLabel = (score: number): string => {
   return 'Needs Improvement';
 };
 
-const avg = (arr: (number | null)[]): number => {
-  const valid = arr.filter((n) => n !== null) as number[];
+const avg = (arr: (number | null)[]): number | null => {
+  const valid = arr.filter(
+    (n): n is number => n !== null && Number.isFinite(Number(n))
+  );
   return valid.length
     ? parseFloat((valid.reduce((a, b) => a + b, 0) / valid.length).toFixed(1))
-    : 0;
+    : null;
+};
+
+const avgWithMissingZeros = (
+  arr: (number | null)[],
+  missingCount: number
+): number | null => {
+  const zeros = Array(Math.max(0, missingCount)).fill(0);
+  return avg([...arr, ...zeros]);
 };
 
 const toStringArray = (value: any): string[] => {
@@ -84,6 +95,23 @@ const bucketScore = (score: number | null | undefined, isHeuristic: boolean) => 
   return Math.round(numericScore * 2) / 2;
 };
 
+const skippedAnalysisData = {
+  clarityScore: 0,
+  fluencyScore: 0,
+  confidenceScore: 0,
+  relevanceScore: 0,
+  grammarScore: 0,
+  pronunciationScore: 0,
+  technicalScore: 0,
+  fillerWordCount: 0,
+  speechRateWpm: 0,
+  sentiment: 'neutral',
+  overallScore: 0,
+  llmProvider: null,
+  scorerBackend: 'skipped',
+  feedbackJson: ['Question skipped; scored as 0 for this session.'],
+};
+
 const mapPipelineResultToAnalysis = (mlResult: any) => {
   const content = mlResult?.content_scores ?? {};
   const delivery = mlResult?.delivery_scores ?? {};
@@ -92,21 +120,25 @@ const mapPipelineResultToAnalysis = (mlResult: any) => {
   const scorerBackend =
     mlResult?.scorer_backend ??
     mlResult?.content_model_evaluation?.scorer_backend ??
-    null;
+    'unknown';
+  const hasAudio = Boolean(audio.audio_available);
   const scoringMode = scoringModeLabel(llmProvider, scorerBackend);
   const isHeuristic =
     llmProvider === 'heuristic_fallback' || scorerBackend === 'local_semantic';
-  const fluencyScore = bucketScore(delivery.fluency, isHeuristic);
-  const confidenceScore = bucketScore(delivery.confidence_cues, isHeuristic);
-  const pronunciationScore = bucketScore(
-    delivery.voice_quality ?? delivery.delivery,
-    isHeuristic
-  );
+  const fluencyScore = hasAudio
+    ? bucketScore(delivery.fluency, isHeuristic)
+    : null;
+  const confidenceScore = hasAudio
+    ? bucketScore(delivery.confidence_cues, isHeuristic)
+    : null;
+  const pronunciationScore = hasAudio
+    ? bucketScore(delivery.articulation, isHeuristic)
+    : null;
   const hesitationControlScore = bucketScore(delivery.hesitation_control, isHeuristic);
   const voiceQualityScore = bucketScore(delivery.voice_quality, isHeuristic);
   const wordsPerMinute = Number(audio.words_per_minute);
   const hasUsablePace =
-    Boolean(audio.audio_available) &&
+    hasAudio &&
     Number.isFinite(wordsPerMinute) &&
     wordsPerMinute > 0;
   const improvements = Array.isArray(mlResult?.improvements)
@@ -114,7 +146,7 @@ const mapPipelineResultToAnalysis = (mlResult: any) => {
     : [];
   const metricFeedback = [];
 
-  if (audio.audio_available) {
+  if (hasAudio) {
     if (hasUsablePace) {
       metricFeedback.push(`Speaking speed: ${Math.round(wordsPerMinute)} WPM`);
     }
@@ -143,7 +175,7 @@ const mapPipelineResultToAnalysis = (mlResult: any) => {
     fluencyScore,
     confidenceScore,
     relevanceScore: content.relevance ?? null,
-    grammarScore: content.clarity ?? null,
+    grammarScore: content.correctness ?? null,
     pronunciationScore,
     technicalScore:
       content.correctness != null && content.completeness != null
@@ -339,7 +371,7 @@ export const getSessionReview = async (userId: string, sessionId: string) => {
   };
 };
 
-export const generateMockAnalysis = async (
+export const generateSessionAnalysis = async (
   userId: string,
   sessionId: string
 ) => {
@@ -361,25 +393,37 @@ export const generateMockAnalysis = async (
   if (!session) throw new ApiError('NOT_FOUND', 'Session not found.', 404);
 
   for (const response of session.responses) {
+    // Skip analysis entirely for questions the user skipped
+    const isSkipped =
+      !response.transcript ||
+      response.transcript.trim() === '[skipped]' ||
+      response.transcript.trim() === '';
+
+    if (isSkipped) {
+      await prisma.responseAnalysis.upsert({
+        where: { responseId: response.id },
+        update: skippedAnalysisData,
+        create: { responseId: response.id, ...skippedAnalysisData },
+      });
+      continue;
+    }
+
     let analysisData: any = {
-      clarityScore: 7.5,
-      fluencyScore: 7.2,
-      confidenceScore: 7.0,
-      relevanceScore: 7.8,
-      grammarScore: 7.4,
-      pronunciationScore: 7.1,
-      technicalScore: 7.6,
-      fillerWordCount: 5,
-      speechRateWpm: 130,
-      sentiment: 'positive',
-      overallScore: 7.4,
+      clarityScore: null,
+      fluencyScore: null,
+      confidenceScore: null,
+      relevanceScore: null,
+      grammarScore: null,
+      pronunciationScore: null,
+      technicalScore: null,
+      fillerWordCount: null,
+      speechRateWpm: null,
+      sentiment: 'neutral',
+      overallScore: null,
       llmProvider: null,
       scorerBackend: 'fallback_mock',
       feedbackJson: [
         'Fallback analysis: ML services unavailable; these scores are provisional.',
-        'Good structure',
-        'Add more examples',
-        'Reduce filler words',
       ],
     };
 
@@ -388,9 +432,14 @@ export const generateMockAnalysis = async (
     // Use real ML when either a transcript or the original audio is available.
     if (response.transcript || audioUrl) {
       logger.info(`Using new evaluator pipeline for response: ${response.id}`);
-      const expectedKeywords = toStringArray(response.question.expectedKeywords);
-      const referenceAnswer = response.question.referenceAnswer || '';
-      const expectedKeyPoints = referenceAnswer ? [referenceAnswer] : [];
+      const { expectedKeywords, expectedKeyPoints, referenceAnswer } =
+        buildEvaluationRubric(response.question, session.targetRole);
+
+      logger.info(
+        `Response ${response.id}: audioUrl=${audioUrl ?? 'NULL'}, transcript length=${
+          (response.transcript || '').length
+        }`
+      );
 
       const pipelineResult = await analyzeAnswerPipeline({
         responseId: response.id,
@@ -429,7 +478,7 @@ export const generateMockAnalysis = async (
             sentiment: mlResult.sentiment,
             overallScore: mlResult.overallScore,
             llmProvider: mlResult.llmProvider ?? null,
-            scorerBackend: mlResult.scorerBackend ?? null,
+            scorerBackend: mlResult.scorerBackend ?? 'unknown',
             feedbackJson: mlResult.feedbackJson,
           };
         } else {
@@ -452,65 +501,104 @@ export const generateMockAnalysis = async (
     where: { response: { sessionId } },
   });
 
-  const overallScore = parseFloat(
-    avg(analyses.map((a) => a.overallScore)).toFixed(1)
+  const scoredAnalyses = analyses.filter((a) => a.overallScore !== null);
+  const missingQuestionCount = Math.max(
+    0,
+    (session.questionCount ?? scoredAnalyses.length) - scoredAnalyses.length
   );
+  const overallScoreAvg = avgWithMissingZeros(
+    scoredAnalyses.map((a) => a.overallScore),
+    missingQuestionCount
+  );
+  const overallScore = overallScoreAvg ?? 0;
+
+  const radarRaw = [
+    {
+      label: 'Communication',
+      value: avgWithMissingZeros(
+        scoredAnalyses.map((a) => a.relevanceScore),
+        missingQuestionCount
+      ),
+    },
+    {
+      label: 'Technical',
+      value: avgWithMissingZeros(
+        scoredAnalyses.map((a) => a.technicalScore),
+        missingQuestionCount
+      ),
+    },
+    {
+      label: 'Clarity',
+      value: avgWithMissingZeros(
+        scoredAnalyses.map((a) => a.clarityScore),
+        missingQuestionCount
+      ),
+    },
+    {
+      label: 'Confidence',
+      value: avgWithMissingZeros(
+        scoredAnalyses.map((a) => a.confidenceScore),
+        missingQuestionCount
+      ),
+    },
+    {
+      label: 'Fluency',
+      value: avgWithMissingZeros(
+        scoredAnalyses.map((a) => a.fluencyScore),
+        missingQuestionCount
+      ),
+    },
+  ];
+  const radarFiltered = radarRaw.filter(
+    (item): item is { label: string; value: number } => item.value !== null
+  );
+  const strengths = radarFiltered
+    .filter((item) => item.value >= 7)
+    .map((item) => item.label);
+  const weaknesses = radarFiltered
+    .filter((item) => item.value < 5)
+    .map((item) => item.label);
+  const recommendations = [
+    overallScore < 5
+      ? 'Answer every question with at least one concrete, relevant technical point before moving on.'
+      : 'Keep answers tied directly to the question and expected concepts.',
+    weaknesses.includes('Technical')
+      ? 'Add specific implementation details, trade-offs, and examples to improve technical depth.'
+      : null,
+    missingQuestionCount > 0 || scoredAnalyses.some((a) => a.scorerBackend === 'skipped')
+      ? 'Avoid skipping questions; skipped or unanswered questions count as 0 in the final score.'
+      : null,
+  ].filter(Boolean);
+  const summary =
+    overallScore < 5
+      ? 'Several answers were missing, skipped, or lacked enough relevant content to score well.'
+      : 'AI-powered analysis of your interview performance.';
 
   await prisma.report.upsert({
     where: { sessionId },
     update: {
       overallScore,
       ratingLabel: getRatingLabel(overallScore),
-      summary: 'AI-powered analysis of your interview performance.',
-      strengthsJson: ['Clear communication', 'Good answer structure'],
-      weaknessesJson: ['Technical depth', 'Filler words'],
-      recommendationsJson: [
-        'Practice concise answers',
-        'Use measurable examples',
-      ],
+      summary,
+      strengthsJson: strengths,
+      weaknessesJson: weaknesses,
+      recommendationsJson: recommendations,
       radarDataJson: {
-        labels: [
-          'Communication',
-          'Confidence',
-          'Technical',
-          'Clarity',
-          'Fluency',
-        ],
-        values: [
-          avg(analyses.map((a) => a.clarityScore)),
-          avg(analyses.map((a) => a.confidenceScore)),
-          avg(analyses.map((a) => a.technicalScore)),
-          avg(analyses.map((a) => a.clarityScore)),
-          avg(analyses.map((a) => a.fluencyScore)),
-        ],
+        labels: radarFiltered.map((item) => item.label),
+        values: radarFiltered.map((item) => item.value),
       },
     },
     create: {
       sessionId,
       overallScore,
       ratingLabel: getRatingLabel(overallScore),
-      summary: 'AI-powered analysis of your interview performance.',
-      strengthsJson: ['Clear communication', 'Good answer structure'],
-      weaknessesJson: ['Technical depth', 'Filler words'],
-      recommendationsJson: [
-        'Practice concise answers',
-        'Use measurable examples',
-      ],
+      summary,
+      strengthsJson: strengths,
+      weaknessesJson: weaknesses,
+      recommendationsJson: recommendations,
       radarDataJson: {
-        labels: [
-          'Communication',
-          'Confidence',
-          'Technical',
-          'Clarity',
-          'Fluency',
-        ],
-        values: [
-          avg(analyses.map((a) => a.clarityScore)),
-          avg(analyses.map((a) => a.confidenceScore)),
-          avg(analyses.map((a) => a.technicalScore)),
-          avg(analyses.map((a) => a.clarityScore)),
-          avg(analyses.map((a) => a.fluencyScore)),
-        ],
+        labels: radarFiltered.map((item) => item.label),
+        values: radarFiltered.map((item) => item.value),
       },
     },
   });

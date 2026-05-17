@@ -73,7 +73,7 @@ export const generateAnalysis = async (
   next: NextFunction
 ) => {
   try {
-    const result = await AnalysisService.generateMockAnalysis(
+    const result = await AnalysisService.generateSessionAnalysis(
       req.user.id,
       req.params.id
     );

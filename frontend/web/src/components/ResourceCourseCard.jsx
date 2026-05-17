@@ -31,7 +31,7 @@ const CATEGORY_CHIP = {
 const PLATFORM_EMOJI = {
   Udemy: '🎓', Coursera: '📚', edX: '🏛️',
   'LinkedIn Learning': '💼', Pluralsight: '▶️',
-  FreeCodeCamp: '🔥', YouTube: '▶️',
+  FreeCodeCamp: <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif" alt="🔥" style={{ width: '1em', height: '1em', verticalAlign: '-0.15em' }} />, YouTube: '▶️',
   Article: '📰', Guide: '📖', Tool: '🛠️',
 };
 

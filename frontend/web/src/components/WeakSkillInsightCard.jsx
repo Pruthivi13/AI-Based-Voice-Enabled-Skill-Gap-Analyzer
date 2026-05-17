@@ -4,12 +4,39 @@
  * Compact dashboard banner that surfaces the top weak skill
  * with urgency-coded styling and a "Fix It" button that opens
  * the TargetedPracticeModal.
+ *
+ * Uses Lucide icons (via the `icon` key from the backend) instead of
+ * emojis for consistent cross-device rendering.
  */
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap, ChevronRight, TrendingDown, X } from 'lucide-react';
+import {
+  Zap, ChevronRight, TrendingDown, X,
+  Settings, Shield, Target, AudioLines,
+  PenLine, Crosshair, BarChart2, Lightbulb,
+  Dumbbell,
+} from 'lucide-react';
 import { fetchWeakSkillPrescription } from '../services/api';
 import TargetedPracticeModal from './TargetedPracticeModal';
+
+// Map backend icon key → Lucide component
+const ICON_MAP = {
+  Settings:   Settings,
+  Shield:     Shield,
+  Target:     Target,
+  AudioLines: AudioLines,
+  PenLine:    PenLine,
+  Crosshair:  Crosshair,
+  BarChart2:  BarChart2,
+  Dumbbell:   Dumbbell,
+};
+
+function SkillIcon({ iconKey, size = 20, style = {} }) {
+  const IconComponent = ICON_MAP[iconKey];
+  if (IconComponent) return <IconComponent size={size} strokeWidth={2.2} style={style} />;
+  // Fallback — render nothing rather than a broken emoji
+  return <Lightbulb size={size} strokeWidth={2.2} style={style} />;
+}
 
 const URGENCY = {
   critical: { gradient:'linear-gradient(135deg,rgba(239,68,68,0.12) 0%,rgba(239,68,68,0.04) 100%)',  border:'rgba(239,68,68,0.3)',  glow:'rgba(239,68,68,0.15)',  accent:'#f87171', dot:'bg-red-400',    pulse:true  },
@@ -61,8 +88,8 @@ export default function WeakSkillInsightCard() {
 
               <div style={{ position:'relative', display:'flex', alignItems:'center', gap:16 }}>
                 {/* Icon */}
-                <div style={{ width:44, height:44, borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:22, background:`${s.accent}15`, border:`1px solid ${s.accent}30` }}>
-                  {primary.emoji}
+                <div style={{ width:44, height:44, borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, background:`${s.accent}15`, border:`1px solid ${s.accent}30` }}>
+                  <SkillIcon iconKey={primary.icon} size={22} style={{ color: s.accent }} />
                 </div>
 
                 {/* Text */}
@@ -114,8 +141,9 @@ export default function WeakSkillInsightCard() {
                     {prescription.weakSkills.slice(1, 4).map(skill => {
                       const sa = URGENCY[skill.urgency]?.accent || '#fbbf24';
                       return (
-                        <span key={skill.key} style={{ padding:'2px 10px', borderRadius:99, fontSize:10, fontWeight:600, background:`${sa}12`, color:sa, border:`1px solid ${sa}25` }}>
-                          {skill.emoji} {skill.label} · {skill.avgScore.toFixed(1)}
+                        <span key={skill.key} style={{ padding:'2px 10px', borderRadius:99, fontSize:10, fontWeight:600, background:`${sa}12`, color:sa, border:`1px solid ${sa}25`, display:'inline-flex', alignItems:'center', gap:4 }}>
+                          <SkillIcon iconKey={skill.icon} size={12} style={{ color: sa }} />
+                          {skill.label} · {skill.avgScore.toFixed(1)}
                         </span>
                       );
                     })}

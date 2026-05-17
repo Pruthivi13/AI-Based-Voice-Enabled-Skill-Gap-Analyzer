@@ -20,6 +20,37 @@ app = FastAPI(title="AI Voice Skill Gap Analyzer - ML Service")
 
 logger = setup_logger(__name__)
 
+TRANSCRIPTION_FAILED_SENTINEL = "__TRANSCRIPTION_FAILED__"
+
+
+@app.on_event("startup")
+async def preload_models():
+    """Pre-load heavy models so the first real request is less likely to stall."""
+    loop = asyncio.get_running_loop()
+
+    try:
+        from backend.services.stt_service import _get_whisper_model
+
+        await loop.run_in_executor(None, _get_whisper_model)
+        logger.info("Whisper model pre-loaded.")
+    except Exception as error:
+        logger.warning("Whisper pre-load failed: %s", error)
+
+    try:
+        from backend.services.content_scorer import get_sentence_transformer
+
+        await loop.run_in_executor(None, get_sentence_transformer)
+        logger.info("SentenceTransformer pre-loaded.")
+    except Exception as error:
+        logger.warning("SentenceTransformer pre-load failed: %s", error)
+
+    try:
+        from backend.services.content_scorer import _check_model_available
+
+        _check_model_available()
+    except Exception:
+        pass
+
 torch.manual_seed(42)
 np.random.seed(42)
 random.seed(42)
@@ -625,6 +656,14 @@ async def websocket_transcribe(websocket: WebSocket, response_id: str):
         if audio_chunks:
             final_text = await run_transcription(audio_chunks, partial=False)
             try:
+                if final_text == TRANSCRIPTION_FAILED_SENTINEL:
+                    await websocket.send_text(json.dumps({
+                        "type": "error",
+                        "message": "Transcription failed. Please try recording again.",
+                        "responseId": response_id
+                    }))
+                    return
+
                 await websocket.send_text(json.dumps({
                     "type": "final",
                     "text": final_text,
@@ -691,7 +730,7 @@ async def run_transcription(chunks: list, partial: bool = False) -> str:
 
         if not os.path.exists(wav_path) or os.path.getsize(wav_path) < 100:
             logger.error(f"ffmpeg failed to create valid wav. stderr: {result.stderr[:500]}")
-            return ""
+            return "" if partial else TRANSCRIPTION_FAILED_SENTINEL
 
         loop = asyncio.get_event_loop()
         transcript = await loop.run_in_executor(
@@ -703,7 +742,7 @@ async def run_transcription(chunks: list, partial: bool = False) -> str:
 
     except Exception as e:
         logger.error(f"Transcription error: {e}")
-        return ""
+        return "" if partial else TRANSCRIPTION_FAILED_SENTINEL
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)

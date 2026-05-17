@@ -152,7 +152,7 @@ def verify_audio_metrics() -> dict:
     expect(result["audio_available"] is True, "audio metrics see an audio file")
     expect(result["pause_detection_backend"] == "librosa", "pause detection uses librosa")
     expect(result["pause_count"] >= 1, "pause detector finds the injected pause")
-    expect(result["words_per_minute_basis"] == "audio_duration_seconds", "WPM uses real audio duration")
+    expect(result["words_per_minute_basis"] == "speech_seconds", "WPM uses detected speech duration")
     expect(result["words_per_minute"] > 0, "WPM is nonzero for audio")
     show(
         "audio summary",
@@ -234,7 +234,7 @@ def verify_real_spoken_audio_endpoint() -> dict | None:
     body = response.json()
     audio = body["audio_metrics"]
     expect(audio["audio_available"] is True, "real audio endpoint marks audio available")
-    expect(audio["words_per_minute_basis"] == "audio_duration_seconds", "real audio endpoint WPM uses audio duration")
+    expect(audio["words_per_minute_basis"] == "speech_seconds", "real audio endpoint WPM uses speech duration")
     expect(audio["words_per_minute"] > 0, "real audio endpoint produces WPM")
     expect(audio["pause_detection_backend"] == "librosa", "real audio endpoint uses librosa pause detection")
     expect(body["stt"]["provider"] != "provided_transcript", "real audio endpoint runs STT")

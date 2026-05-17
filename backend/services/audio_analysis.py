@@ -634,8 +634,12 @@ def _parselmouth_voice_metrics(wav_path: str) -> dict[str, float]:
 
 def _word_timing_metrics(segments: list[dict[str, Any]] | None) -> dict[str, Any]:
     words: list[dict[str, Any]] = []
+    missing_word_timestamps = False
     for segment in segments or []:
-        for word in segment.get("words", []) or []:
+        segment_words = segment.get("words", []) or []
+        if not segment_words and str(segment.get("text", "")).strip():
+            missing_word_timestamps = True
+        for word in segment_words:
             start = float(word.get("start", 0.0))
             end = float(word.get("end", start))
             text = str(word.get("word", "")).strip()
@@ -652,6 +656,10 @@ def _word_timing_metrics(segments: list[dict[str, Any]] | None) -> dict[str, Any
 
     words.sort(key=lambda item: item["start"])
     if not words:
+        if missing_word_timestamps:
+            logger.debug(
+                "Segments missing word-level timestamps; delivery metrics will be estimate-only"
+            )
         return {
             "word_timestamps_available": False,
             "timed_word_count": 0,
@@ -979,8 +987,21 @@ def analyze_audio(
         word_timing_result=word_timing_result,
     )
 
+    speech_seconds = float(pause_result.get("speech_seconds") or 0.0)
+    if has_audio and speech_seconds > 0:
+        wpm_duration_seconds = speech_seconds
+        words_per_minute_basis = "speech_seconds"
+    elif has_audio and duration_seconds > 0:
+        wpm_duration_seconds = duration_seconds
+        words_per_minute_basis = "audio_duration_seconds_fallback"
+    else:
+        wpm_duration_seconds = 0.0
+        words_per_minute_basis = "not_available"
+
     words_per_minute = (
-        round((words / duration_seconds) * 60, 1) if duration_seconds > 0 else 0.0
+        round((words / wpm_duration_seconds) * 60, 1)
+        if wpm_duration_seconds > 0
+        else 0.0
     )
     words_per_minute = min(words_per_minute, 300.0)
     filler_ratio = round(filler_result["total"] / max(words, 1), 3)
@@ -993,14 +1014,14 @@ def analyze_audio(
         else 0.0
     )
 
-    if not has_audio and words > 0:
-        pace_score, pace_label = 6.5, "not_available"
-        articulation_score = 6.0
-        speech_ratio_score = 6.0
-        cadence_score = 6.5
-        pitch_stability_score = 6.0
-        energy_score = 6.0
-        voice_quality_score = 6.0
+    if not has_audio:
+        pace_score, pace_label = 0.0, "not_available"
+        articulation_score = 0.0
+        speech_ratio_score = 0.0
+        cadence_score = 0.0
+        pitch_stability_score = 0.0
+        energy_score = 0.0
+        voice_quality_score = 0.0
     else:
         pace_score, pace_label = _pace_score(words_per_minute)
         articulation_score = _articulation_score(
@@ -1012,32 +1033,35 @@ def analyze_audio(
         energy_score = _energy_score(energy)
         voice_quality_score = _voice_quality_score(energy)
 
-    pause_score = clamp(
-        10.0
-        - pause_result["long_pause_count"] * 1.2
-        - pause_result["pause_count"] * 0.3
-        - pause_burden * 6.5
-        - max(0, hesitation["pause_before_short_segment_count"] - 1) * 0.5
-    )
-    filler_score = clamp(
-        10.0
-        - filler_result["weighted_total"] * 0.65
-        - weighted_filler_ratio * 38
-        - filler_result["cluster_count"] * 0.65
-    )
-    fluency_score = round(
-        (
-            pause_score * 0.30
-            + filler_score * 0.25
-            + hesitation["hesitation_score"] * 0.25
-            + cadence_score * 0.20
-        ),
-        2,
-    )
-
     if not has_audio:
-        confidence_cue_score = round(min(7.25, fluency_score * 0.92), 2)
+        pause_score = 0.0
+        filler_score = 0.0
+        fluency_score = 0.0
+        confidence_cue_score = 0.0
+        delivery_score = 0.0
     else:
+        pause_score = clamp(
+            10.0
+            - pause_result["long_pause_count"] * 1.2
+            - pause_result["pause_count"] * 0.3
+            - pause_burden * 6.5
+            - max(0, hesitation["pause_before_short_segment_count"] - 1) * 0.5
+        )
+        filler_score = clamp(
+            10.0
+            - filler_result["weighted_total"] * 0.65
+            - weighted_filler_ratio * 38
+            - filler_result["cluster_count"] * 0.65
+        )
+        fluency_score = round(
+            (
+                pause_score * 0.30
+                + filler_score * 0.25
+                + hesitation["hesitation_score"] * 0.25
+                + cadence_score * 0.20
+            ),
+            2,
+        )
         confidence_cue_score = round(
             (
                 fluency_score * 0.35
@@ -1048,17 +1072,6 @@ def analyze_audio(
             ),
             2,
         )
-
-    if not has_audio:
-        delivery_score = round(
-            (
-                filler_score * 0.30
-                + hesitation["hesitation_score"] * 0.35
-                + fluency_score * 0.35
-            ),
-            2,
-        )
-    else:
         delivery_score = round(
             (
                 pace_score * 0.15
@@ -1076,9 +1089,7 @@ def analyze_audio(
         "duration_seconds": duration_seconds,
         "word_count": words,
         "words_per_minute": words_per_minute,
-        "words_per_minute_basis": (
-            "audio_duration_seconds" if has_audio and duration_seconds > 0 else "not_available"
-        ),
+        "words_per_minute_basis": words_per_minute_basis,
         "pace_label": pace_label,
         "pause_count": pause_result["pause_count"],
         "long_pause_count": pause_result["long_pause_count"],
@@ -1109,7 +1120,7 @@ def analyze_audio(
             "pace": round(pace_score, 2),
             "pause_control": round(pause_score, 2),
             "filler_control": round(filler_score, 2),
-            "hesitation_control": hesitation["hesitation_score"],
+            "hesitation_control": 0.0 if not has_audio else hesitation["hesitation_score"],
             "cadence_control": round(cadence_score, 2),
             "articulation": round(articulation_score, 2),
             "voice_quality": round(voice_quality_score, 2),
