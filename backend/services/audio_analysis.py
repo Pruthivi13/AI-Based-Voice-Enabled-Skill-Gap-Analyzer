@@ -1120,7 +1120,7 @@ def analyze_audio(
             "pace": round(pace_score, 2),
             "pause_control": round(pause_score, 2),
             "filler_control": round(filler_score, 2),
-            "hesitation_control": hesitation["hesitation_score"],
+            "hesitation_control": 0.0 if not has_audio else hesitation["hesitation_score"],
             "cadence_control": round(cadence_score, 2),
             "articulation": round(articulation_score, 2),
             "voice_quality": round(voice_quality_score, 2),

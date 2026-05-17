@@ -1,11 +1,33 @@
 """
 Final score engine.
 
-Content carries 70 percent and delivery carries 30 percent, as requested.
+Content carries 70 percent and delivery carries 30 percent for real answers.
+For empty, skipped, unrelated, or very low-signal answers, content gates the
+final score so fluent nonsense cannot receive an average interview rating.
 """
 from __future__ import annotations
 
+import re
 from typing import Any
+
+_LOW_SIGNAL_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "it",
+    "oh",
+    "of",
+    "s",
+    "so",
+    "that",
+    "the",
+    "this",
+    "to",
+    "uh",
+    "um",
+    "yeah",
+}
 
 
 def _round(value: float) -> float:
@@ -20,6 +42,131 @@ def _positive_score_or_none(value: Any) -> float | None:
     if numeric <= 0:
         return None
     return _round(numeric)
+
+
+def _word_tokens(text: str) -> list[str]:
+    return re.findall(r"[A-Za-z0-9+#.-]+", text or "")
+
+
+def _meaningful_token_count(text: str) -> int:
+    return sum(
+        1
+        for token in _word_tokens(text)
+        if token.lower() not in _LOW_SIGNAL_STOPWORDS and len(token) > 2
+    )
+
+
+def _coverage_score(keyword_result: dict[str, Any]) -> float:
+    keyword_score = keyword_result.get("keyword_score")
+    concept_score = keyword_result.get("concept_score")
+    scores = []
+    for value in (keyword_score, concept_score):
+        try:
+            scores.append(float(value))
+        except (TypeError, ValueError):
+            continue
+    if scores:
+        return max(scores)
+
+    expected_count = len(keyword_result.get("keywords_found", [])) + len(
+        keyword_result.get("missing_keywords", [])
+    )
+    found_count = len(keyword_result.get("keywords_found", []))
+    if expected_count:
+        return (found_count / expected_count) * 10.0
+    return 0.0
+
+
+def _model_signal_score(content_model_result: dict[str, Any] | None) -> float | None:
+    if not content_model_result:
+        return None
+    try:
+        score = content_model_result.get("content_score")
+        if score is not None:
+            return float(score)
+    except (TypeError, ValueError):
+        pass
+
+    label = str(content_model_result.get("final_score") or "").upper()
+    if label == "STRONG":
+        return 8.5
+    if label == "AVERAGE":
+        return 6.0
+    if label == "WEAK":
+        return 2.0
+    return None
+
+
+def _semantic_signal(content_model_result: dict[str, Any] | None) -> float:
+    if not content_model_result:
+        return 0.0
+    try:
+        return max(
+            float(content_model_result.get("semantic_similarity") or 0.0),
+            float(content_model_result.get("keyword_overlap") or 0.0),
+            float(content_model_result.get("reference_coverage") or 0.0),
+        )
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _is_explicit_non_answer(transcript: str) -> bool:
+    normalized = " ".join(token.lower() for token in _word_tokens(transcript))
+    if not normalized:
+        return True
+    patterns = (
+        r"\bi do not know\b",
+        r"\bi don'?t know\b",
+        r"\bno idea\b",
+        r"\bnot sure\b",
+        r"\bi have no answer\b",
+        r"\bskip\b",
+        r"\bno speech detected\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
+def _low_content_signal(
+    transcript: str,
+    keyword_result: dict[str, Any],
+    rubric_content_score: float,
+    content_model_result: dict[str, Any] | None,
+) -> tuple[bool, str | None]:
+    word_count = len(_word_tokens(transcript))
+    meaningful_tokens = _meaningful_token_count(transcript)
+    coverage = _coverage_score(keyword_result)
+    model_score = _model_signal_score(content_model_result)
+    semantic_signal = _semantic_signal(content_model_result)
+    has_expected_rubric = bool(
+        keyword_result.get("keywords_found")
+        or keyword_result.get("missing_keywords")
+        or keyword_result.get("key_points_found")
+        or keyword_result.get("missing_key_points")
+    )
+
+    if _is_explicit_non_answer(transcript):
+        return True, "non_answer"
+
+    no_reference_signal = (
+        coverage <= 0.0
+        and semantic_signal < 0.22
+        and (model_score is None or model_score < 4.0)
+    )
+    if word_count < 8 and no_reference_signal and meaningful_tokens < 3:
+        return True, "too_short_without_reference_signal"
+
+    if has_expected_rubric and coverage <= 0.0 and semantic_signal < 0.20:
+        if (word_count < 16 and meaningful_tokens < 3) or rubric_content_score < 3.5:
+            return True, "unrelated_to_rubric"
+
+    if word_count < 12 and meaningful_tokens < 3 and coverage <= 1.0 and rubric_content_score < 4.0:
+        return True, "minimal_content"
+
+    return False, None
+
+
+def _cap_score(value: float, cap: float) -> float:
+    return _round(min(float(value), cap))
 
 
 def _label(score: float) -> str:
@@ -123,6 +270,21 @@ def build_final_result(
         if model_signal_score is not None
         else rubric_content_score
     )
+    low_signal_answer, low_signal_reason = _low_content_signal(
+        transcript=transcript,
+        keyword_result=keyword_result,
+        rubric_content_score=rubric_content_score,
+        content_model_result=content_model_result,
+    )
+    if low_signal_answer:
+        content_score = _cap_score(content_score, 2.5)
+        content_scores_display = {
+            "relevance": _cap_score(content_scores_display["relevance"], 2.0),
+            "correctness": _cap_score(content_scores_display["correctness"], 1.5),
+            "completeness": _cap_score(content_scores_display["completeness"], 1.0),
+            "clarity": _cap_score(content_scores_display["clarity"], 3.0),
+        }
+
     has_audio = audio_metrics.get("audio_available", True)
     raw_delivery_scores = audio_metrics.get("scores", {})
     delivery_score_keys = (
@@ -146,10 +308,28 @@ def build_final_result(
     )
     delivery_score = _round(raw_delivery_scores.get("delivery", 0.0)) if has_audio else 0.0
 
+    if low_signal_answer:
+        delivery_scores = {
+            key: _cap_score(score, 3.0)
+            for key, score in delivery_scores.items()
+        }
+        delivery_score = _cap_score(delivery_score, 3.0)
+    elif content_score < 4.0:
+        delivery_scores = {
+            key: _cap_score(score, 5.0)
+            for key, score in delivery_scores.items()
+        }
+        delivery_score = _cap_score(delivery_score, 5.0)
+
     if has_audio:
         overall_score = _round((content_score * 0.7) + (delivery_score * 0.3))
     else:
         overall_score = content_score
+
+    if low_signal_answer:
+        overall_score = _cap_score(overall_score, 2.7)
+    elif content_score < 4.0:
+        overall_score = _cap_score(overall_score, 4.0)
 
     final_label = _label(overall_score)
 
@@ -163,7 +343,14 @@ def build_final_result(
         elif content_model_result.get("final_score") != "UNSCORED" and model_feedback:
             improvements.append(str(model_feedback))
 
-    if not strengths:
+    if low_signal_answer:
+        strengths = []
+        improvements.insert(
+            0,
+            "The response did not contain enough relevant technical content to score as an answered question.",
+        )
+
+    if not strengths and not low_signal_answer:
         strengths.append("The response has enough signal to evaluate.")
     if not improvements:
         improvements.append("Add more depth and examples to make the answer stand out.")
@@ -209,6 +396,8 @@ def build_final_result(
         "delivery_score": delivery_score,
         "overall_score": overall_score,
         "label": final_label,
+        "low_content_signal": low_signal_answer,
+        "low_content_reason": low_signal_reason,
         "strengths": strengths[:6],
         "improvements": improvements[:6],
         "feedback": feedback,

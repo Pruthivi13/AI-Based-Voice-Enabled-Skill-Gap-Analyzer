@@ -20,10 +20,20 @@ const getRatingLabel = (score: number): string => {
 };
 
 const avg = (arr: (number | null)[]): number | null => {
-  const valid = arr.filter((n): n is number => n !== null && n > 0);
+  const valid = arr.filter(
+    (n): n is number => n !== null && Number.isFinite(Number(n))
+  );
   return valid.length
     ? parseFloat((valid.reduce((a, b) => a + b, 0) / valid.length).toFixed(1))
     : null;
+};
+
+const avgWithMissingZeros = (
+  arr: (number | null)[],
+  missingCount: number
+): number | null => {
+  const zeros = Array(Math.max(0, missingCount)).fill(0);
+  return avg([...arr, ...zeros]);
 };
 
 const toStringArray = (value: any): string[] => {
@@ -83,6 +93,23 @@ const bucketScore = (score: number | null | undefined, isHeuristic: boolean) => 
   if (!Number.isFinite(numericScore)) return null;
   if (!isHeuristic) return numericScore;
   return Math.round(numericScore * 2) / 2;
+};
+
+const skippedAnalysisData = {
+  clarityScore: 0,
+  fluencyScore: 0,
+  confidenceScore: 0,
+  relevanceScore: 0,
+  grammarScore: 0,
+  pronunciationScore: 0,
+  technicalScore: 0,
+  fillerWordCount: 0,
+  speechRateWpm: 0,
+  sentiment: 'neutral',
+  overallScore: 0,
+  llmProvider: null,
+  scorerBackend: 'skipped',
+  feedbackJson: ['Question skipped; scored as 0 for this session.'],
 };
 
 const mapPipelineResultToAnalysis = (mlResult: any) => {
@@ -373,9 +400,10 @@ export const generateSessionAnalysis = async (
       response.transcript.trim() === '';
 
     if (isSkipped) {
-      // Remove any stale analysis from a previous attempt
-      await prisma.responseAnalysis.deleteMany({
+      await prisma.responseAnalysis.upsert({
         where: { responseId: response.id },
+        update: skippedAnalysisData,
+        create: { responseId: response.id, ...skippedAnalysisData },
       });
       continue;
     }
@@ -474,32 +502,87 @@ export const generateSessionAnalysis = async (
   });
 
   const scoredAnalyses = analyses.filter((a) => a.overallScore !== null);
-  const overallScoreAvg = avg(scoredAnalyses.map((a) => a.overallScore));
+  const missingQuestionCount = Math.max(
+    0,
+    (session.questionCount ?? scoredAnalyses.length) - scoredAnalyses.length
+  );
+  const overallScoreAvg = avgWithMissingZeros(
+    scoredAnalyses.map((a) => a.overallScore),
+    missingQuestionCount
+  );
   const overallScore = overallScoreAvg ?? 0;
 
   const radarRaw = [
-    { label: 'Communication', value: avg(scoredAnalyses.map((a) => a.relevanceScore)) },
-    { label: 'Technical', value: avg(scoredAnalyses.map((a) => a.technicalScore)) },
-    { label: 'Clarity', value: avg(scoredAnalyses.map((a) => a.clarityScore)) },
-    { label: 'Confidence', value: avg(scoredAnalyses.map((a) => a.confidenceScore)) },
-    { label: 'Fluency', value: avg(scoredAnalyses.map((a) => a.fluencyScore)) },
+    {
+      label: 'Communication',
+      value: avgWithMissingZeros(
+        scoredAnalyses.map((a) => a.relevanceScore),
+        missingQuestionCount
+      ),
+    },
+    {
+      label: 'Technical',
+      value: avgWithMissingZeros(
+        scoredAnalyses.map((a) => a.technicalScore),
+        missingQuestionCount
+      ),
+    },
+    {
+      label: 'Clarity',
+      value: avgWithMissingZeros(
+        scoredAnalyses.map((a) => a.clarityScore),
+        missingQuestionCount
+      ),
+    },
+    {
+      label: 'Confidence',
+      value: avgWithMissingZeros(
+        scoredAnalyses.map((a) => a.confidenceScore),
+        missingQuestionCount
+      ),
+    },
+    {
+      label: 'Fluency',
+      value: avgWithMissingZeros(
+        scoredAnalyses.map((a) => a.fluencyScore),
+        missingQuestionCount
+      ),
+    },
   ];
   const radarFiltered = radarRaw.filter(
     (item): item is { label: string; value: number } => item.value !== null
   );
+  const strengths = radarFiltered
+    .filter((item) => item.value >= 7)
+    .map((item) => item.label);
+  const weaknesses = radarFiltered
+    .filter((item) => item.value < 5)
+    .map((item) => item.label);
+  const recommendations = [
+    overallScore < 5
+      ? 'Answer every question with at least one concrete, relevant technical point before moving on.'
+      : 'Keep answers tied directly to the question and expected concepts.',
+    weaknesses.includes('Technical')
+      ? 'Add specific implementation details, trade-offs, and examples to improve technical depth.'
+      : null,
+    missingQuestionCount > 0 || scoredAnalyses.some((a) => a.scorerBackend === 'skipped')
+      ? 'Avoid skipping questions; skipped or unanswered questions count as 0 in the final score.'
+      : null,
+  ].filter(Boolean);
+  const summary =
+    overallScore < 5
+      ? 'Several answers were missing, skipped, or lacked enough relevant content to score well.'
+      : 'AI-powered analysis of your interview performance.';
 
   await prisma.report.upsert({
     where: { sessionId },
     update: {
       overallScore,
       ratingLabel: getRatingLabel(overallScore),
-      summary: 'AI-powered analysis of your interview performance.',
-      strengthsJson: ['Clear communication', 'Good answer structure'],
-      weaknessesJson: ['Technical depth', 'Filler words'],
-      recommendationsJson: [
-        'Practice concise answers',
-        'Use measurable examples',
-      ],
+      summary,
+      strengthsJson: strengths,
+      weaknessesJson: weaknesses,
+      recommendationsJson: recommendations,
       radarDataJson: {
         labels: radarFiltered.map((item) => item.label),
         values: radarFiltered.map((item) => item.value),
@@ -509,13 +592,10 @@ export const generateSessionAnalysis = async (
       sessionId,
       overallScore,
       ratingLabel: getRatingLabel(overallScore),
-      summary: 'AI-powered analysis of your interview performance.',
-      strengthsJson: ['Clear communication', 'Good answer structure'],
-      weaknessesJson: ['Technical depth', 'Filler words'],
-      recommendationsJson: [
-        'Practice concise answers',
-        'Use measurable examples',
-      ],
+      summary,
+      strengthsJson: strengths,
+      weaknessesJson: weaknesses,
+      recommendationsJson: recommendations,
       radarDataJson: {
         labels: radarFiltered.map((item) => item.label),
         values: radarFiltered.map((item) => item.value),
