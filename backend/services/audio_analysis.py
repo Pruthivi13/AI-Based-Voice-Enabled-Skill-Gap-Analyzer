@@ -16,14 +16,36 @@ import tempfile
 from collections import defaultdict
 from pathlib import Path
 from statistics import mean, pstdev
-from typing import Any
+from typing import Any, TypedDict
 
 import numpy as np
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
-FILLER_PATTERNS = [
+
+class FillerPattern(TypedDict):
+    phrase: str
+    category: str
+    weight: float
+
+
+class TranscriptToken(TypedDict):
+    index: int
+    raw: str
+    normalized: str
+    is_word: bool
+
+
+class FillerEvent(TypedDict):
+    phrase: str
+    category: str
+    weight: float
+    start_word: int
+    end_word: int
+
+
+FILLER_PATTERNS: list[FillerPattern] = [
     {"phrase": "you know", "category": "discourse", "weight": 1.0},
     {"phrase": "i mean", "category": "repair", "weight": 1.15},
     {"phrase": "kind of", "category": "hedge", "weight": 0.9},
@@ -58,6 +80,21 @@ def clamp(value: float, minimum: float = 0.0, maximum: float = 10.0) -> float:
     return max(minimum, min(maximum, value))
 
 
+def _to_float(value: Any, default: float = 0.0) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    return number if math.isfinite(number) else default
+
+
+def _to_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(_to_float(value, float(default)))
+    except (TypeError, ValueError):
+        return default
+
+
 def _safe_divide(numerator: float, denominator: float) -> float:
     if not denominator:
         return 0.0
@@ -72,8 +109,8 @@ def _tokenize_words(text: str) -> list[str]:
     return re.findall(r"[A-Za-z0-9+#.-]+", text.lower())
 
 
-def _transcript_tokens(text: str) -> list[dict[str, Any]]:
-    tokens = []
+def _transcript_tokens(text: str) -> list[TranscriptToken]:
+    tokens: list[TranscriptToken] = []
     for index, raw in enumerate(re.findall(r"[A-Za-z0-9+#.-]+|[.,!?;:-]+", text)):
         normalized = raw.lower()
         tokens.append(
@@ -87,12 +124,12 @@ def _transcript_tokens(text: str) -> list[dict[str, Any]]:
     return tokens
 
 
-def _word_only_tokens(tokens: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _word_only_tokens(tokens: list[TranscriptToken]) -> list[TranscriptToken]:
     return [token for token in tokens if token["is_word"]]
 
 
 def _find_phrase_occurrences(
-    word_tokens: list[dict[str, Any]],
+    word_tokens: list[TranscriptToken],
     phrase_tokens: list[str],
 ) -> list[tuple[int, int]]:
     if not phrase_tokens:
@@ -115,7 +152,7 @@ def _count_phrase(text: str, phrase: str) -> int:
 def scan_filler_words(transcript: str) -> dict[str, Any]:
     tokens = _transcript_tokens(transcript)
     word_tokens = _word_only_tokens(tokens)
-    events: list[dict[str, Any]] = []
+    events: list[FillerEvent] = []
     occupied_word_positions: set[int] = set()
 
     for pattern in sorted(FILLER_PATTERNS, key=lambda item: len(item["phrase"]), reverse=True):
@@ -185,7 +222,7 @@ def scan_filler_words(transcript: str) -> dict[str, Any]:
     for event in events:
         counts_by_phrase[event["phrase"]] += 1
         counts_by_category[event["category"]] += 1
-        weighted_total += float(event["weight"])
+        weighted_total += event["weight"]
 
     cluster_count = 0
     largest_cluster = 0
@@ -253,8 +290,8 @@ def _count_clause_fragments(transcript: str) -> int:
     return sum(1 for fragment in fragments if 0 < _word_count(fragment) <= 2)
 
 
-def _load_audio_segment(audio_path: str):
-    from pydub import AudioSegment
+def _load_audio_segment(audio_path: str) -> Any:
+    from pydub import AudioSegment  # type: ignore
 
     return AudioSegment.from_file(audio_path)
 
@@ -269,7 +306,7 @@ def _audio_to_temp_wav(audio_path: str) -> str:
 
 
 def _pause_metrics_with_pydub(audio_path: str) -> dict[str, Any]:
-    from pydub.silence import detect_nonsilent, detect_silence
+    from pydub.silence import detect_nonsilent, detect_silence  # type: ignore
 
     audio = _load_audio_segment(audio_path)
     duration_seconds = len(audio) / 1000.0
@@ -290,8 +327,15 @@ def _pause_metrics_with_pydub(audio_path: str) -> dict[str, Any]:
             "pause_detection_backend": "pydub",
         }
 
-    base_dbfs = audio.dBFS if math.isfinite(audio.dBFS) else -40.0
-    silence_threshold = float(os.getenv("PAUSE_SILENCE_DBFS", base_dbfs - 16))
+    audio_dbfs = _to_float(getattr(audio, "dBFS", -40.0), -40.0)
+    base_dbfs = audio_dbfs if math.isfinite(audio_dbfs) else -40.0
+    default_silence_threshold = base_dbfs - 16.0
+    raw_silence_threshold = os.getenv("PAUSE_SILENCE_DBFS")
+    default_silence_threshold_int = _to_int(default_silence_threshold)
+    silence_threshold = _to_int(
+        raw_silence_threshold,
+        default_silence_threshold_int,
+    )
     min_silence_ms = int(os.getenv("PAUSE_MIN_MS", "650"))
     long_pause_ms = int(os.getenv("LONG_PAUSE_MS", "1500"))
     min_chunk_ms = int(os.getenv("SPEECH_CHUNK_MIN_MS", "180"))
@@ -364,7 +408,7 @@ def _pause_metrics_with_pydub(audio_path: str) -> dict[str, Any]:
     }
 
 
-def _empty_pause_metrics() -> dict[str, Any]:
+def _empty_pause_metrics(backend: str = "librosa") -> dict[str, Any]:
     return {
         "duration_seconds": 0.0,
         "pause_count": 0,
@@ -378,17 +422,19 @@ def _empty_pause_metrics() -> dict[str, Any]:
         "chunk_duration_mean": 0.0,
         "pauses": [],
         "speech_chunks": [],
-        "pause_detection_backend": "librosa",
+        "pause_detection_backend": backend,
     }
 
 
 def _pause_metrics(audio_path: str) -> dict[str, Any]:
     wav_path = _audio_to_temp_wav(audio_path)
     try:
-        import librosa
+        import librosa  # type: ignore
 
         samples, sample_rate = librosa.load(wav_path, sr=16000, mono=True)
-        duration_seconds = float(librosa.get_duration(y=samples, sr=sample_rate))
+        duration_seconds = _to_float(
+            librosa.get_duration(y=samples, sr=sample_rate)
+        )
         if duration_seconds <= 0 or samples.size == 0:
             return _empty_pause_metrics()
 
@@ -407,8 +453,8 @@ def _pause_metrics(audio_path: str) -> dict[str, Any]:
         )
         speech_chunks = []
         for start_sample, end_sample in raw_intervals:
-            start = float(start_sample) / sample_rate
-            end = float(end_sample) / sample_rate
+            start = _to_float(start_sample) / sample_rate
+            end = _to_float(end_sample) / sample_rate
             duration = max(0.0, end - start)
             if duration < min_chunk_seconds:
                 continue
@@ -422,8 +468,8 @@ def _pause_metrics(audio_path: str) -> dict[str, Any]:
 
         pauses = []
         for previous, current in zip(speech_chunks, speech_chunks[1:]):
-            start = float(previous["end"])
-            end = float(current["start"])
+            start = _to_float(previous["end"])
+            end = _to_float(current["start"])
             duration = max(0.0, end - start)
             if duration < min_silence_seconds:
                 continue
@@ -479,7 +525,7 @@ def _pause_metrics(audio_path: str) -> dict[str, Any]:
 def _energy_metrics(audio_path: str) -> dict[str, float]:
     wav_path = _audio_to_temp_wav(audio_path)
     try:
-        import librosa
+        import librosa  # type: ignore
 
         frame_length = 2048
         hop_length = 512
@@ -499,13 +545,13 @@ def _energy_metrics(audio_path: str) -> dict[str, float]:
         rms = librosa.feature.rms(
             y=samples, frame_length=frame_length, hop_length=hop_length
         )[0]
-        rms_mean = float(np.mean(rms))
-        rms_std = float(np.std(rms))
+        rms_mean = _to_float(np.mean(rms))
+        rms_std = _to_float(np.std(rms))
         energy_variation = rms_std / (rms_mean + 1e-8)
 
         voiced_threshold = max(rms_mean * 0.55, 0.01)
         voiced_mask = rms > voiced_threshold
-        voiced_ratio = float(np.mean(voiced_mask)) if voiced_mask.size else 0.0
+        voiced_ratio = _to_float(np.mean(voiced_mask)) if voiced_mask.size else 0.0
 
         pitch_values = librosa.yin(
             samples,
@@ -521,10 +567,13 @@ def _energy_metrics(audio_path: str) -> dict[str, float]:
             finite_pitch = pitch_values[np.isfinite(pitch_values) & voiced_mask]
 
         if finite_pitch.size:
-            median_pitch = float(np.median(finite_pitch))
+            median_pitch = _to_float(np.median(finite_pitch))
             pitch_semitones = 12.0 * np.log2(finite_pitch / max(median_pitch, 1e-6))
-            pitch_std = float(np.std(pitch_semitones))
-            pitch_range = float(np.percentile(pitch_semitones, 90) - np.percentile(pitch_semitones, 10))
+            pitch_std = _to_float(np.std(pitch_semitones))
+            pitch_range = _to_float(
+                np.percentile(pitch_semitones, 90)
+                - np.percentile(pitch_semitones, 10)
+            )
         else:
             median_pitch = 0.0
             pitch_std = 0.0
@@ -533,7 +582,7 @@ def _energy_metrics(audio_path: str) -> dict[str, float]:
         return {
             "rms_mean": round(rms_mean, 5),
             "rms_std": round(rms_std, 5),
-            "energy_variation": round(float(energy_variation), 3),
+            "energy_variation": round(energy_variation, 3),
             "voiced_ratio": round(voiced_ratio, 3),
             "pitch_median_hz": round(median_pitch, 2),
             "pitch_std_semitones": round(pitch_std, 3),
@@ -570,8 +619,8 @@ def _empty_parselmouth_metrics() -> dict[str, float]:
 
 def _parselmouth_voice_metrics(wav_path: str) -> dict[str, float]:
     try:
-        import parselmouth
-        from parselmouth.praat import call
+        import parselmouth  # type: ignore
+        from parselmouth.praat import call  # type: ignore
     except Exception:
         return _empty_parselmouth_metrics()
 
@@ -581,9 +630,9 @@ def _parselmouth_voice_metrics(wav_path: str) -> dict[str, float]:
         pitch_values = pitch.selected_array["frequency"]
         pitch_values = pitch_values[pitch_values > 0]
         if pitch_values.size:
-            median_pitch = float(np.median(pitch_values))
+            median_pitch = _to_float(np.median(pitch_values))
             pitch_semitones = 12.0 * np.log2(pitch_values / max(median_pitch, 1e-6))
-            pitch_std = float(np.std(pitch_semitones))
+            pitch_std = _to_float(np.std(pitch_semitones))
         else:
             median_pitch = 0.0
             pitch_std = 0.0
@@ -594,15 +643,15 @@ def _parselmouth_voice_metrics(wav_path: str) -> dict[str, float]:
             silence_threshold=0.1,
             periods_per_window=1.0,
         )
-        hnr = float(call(harmonicity, "Get mean", 0, 0))
+        hnr = _to_float(call(harmonicity, "Get mean", 0, 0))
         if not math.isfinite(hnr):
             hnr = 0.0
 
         point_process = call([sound, pitch], "To PointProcess (cc)")
-        jitter = float(
+        jitter = _to_float(
             call(point_process, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3)
         )
-        shimmer = float(
+        shimmer = _to_float(
             call(
                 [sound, point_process],
                 "Get shimmer (local)",
@@ -640,10 +689,10 @@ def _word_timing_metrics(segments: list[dict[str, Any]] | None) -> dict[str, Any
         if not segment_words and str(segment.get("text", "")).strip():
             missing_word_timestamps = True
         for word in segment_words:
-            start = float(word.get("start", 0.0))
-            end = float(word.get("end", start))
+            start = _to_float(word.get("start", 0.0))
+            end = _to_float(word.get("end", start), start)
             text = str(word.get("word", "")).strip()
-            probability = float(word.get("probability", 0.0))
+            probability = _to_float(word.get("probability", 0.0))
             if text:
                 words.append(
                     {
@@ -721,8 +770,8 @@ def _segment_metrics(segments: list[dict[str, Any]] | None) -> dict[str, Any]:
 
     normalized = []
     for segment in segments:
-        start = float(segment.get("start", 0.0))
-        end = float(segment.get("end", start))
+        start = _to_float(segment.get("start", 0.0))
+        end = _to_float(segment.get("end", start), start)
         text = str(segment.get("text", "")).strip()
         duration = max(0.0, end - start)
         word_count = _word_count(text)
@@ -808,12 +857,12 @@ def _cadence_score(cadence_variation: float) -> float:
 
 
 def _pitch_stability_score(energy: dict[str, float]) -> float:
-    pitch_std = float(
+    pitch_std = _to_float(
         energy.get("praat_pitch_std_semitones")
         or energy.get("pitch_std_semitones", 0.0)
     )
-    pitch_range = float(energy.get("pitch_range_semitones", 0.0))
-    voiced_ratio = float(energy.get("voiced_ratio", 0.0))
+    pitch_range = _to_float(energy.get("pitch_range_semitones", 0.0))
+    voiced_ratio = _to_float(energy.get("voiced_ratio", 0.0))
     return clamp(
         8.5
         + voiced_ratio * 2.0
@@ -823,9 +872,9 @@ def _pitch_stability_score(energy: dict[str, float]) -> float:
 
 
 def _energy_score(energy: dict[str, float]) -> float:
-    rms_mean = float(energy.get("rms_mean", 0.0))
-    energy_variation = float(energy.get("energy_variation", 0.0))
-    voiced_ratio = float(energy.get("voiced_ratio", 0.0))
+    rms_mean = _to_float(energy.get("rms_mean", 0.0))
+    energy_variation = _to_float(energy.get("energy_variation", 0.0))
+    voiced_ratio = _to_float(energy.get("voiced_ratio", 0.0))
     return clamp(
         7.2
         + min(energy_variation, 1.0) * 1.1
@@ -838,9 +887,9 @@ def _voice_quality_score(energy: dict[str, float]) -> float:
     if not energy.get("parselmouth_available"):
         return _pitch_stability_score(energy)
 
-    jitter = float(energy.get("jitter_local", 0.0))
-    shimmer = float(energy.get("shimmer_local", 0.0))
-    hnr = float(energy.get("hnr_mean_db", 0.0))
+    jitter = _to_float(energy.get("jitter_local", 0.0))
+    shimmer = _to_float(energy.get("shimmer_local", 0.0))
+    hnr = _to_float(energy.get("hnr_mean_db", 0.0))
     pitch_score = _pitch_stability_score(energy)
     return clamp(
         pitch_score * 0.45
@@ -918,20 +967,7 @@ def analyze_audio(
     filler_result = scan_filler_words(transcript)
 
     if not audio_path:
-        pause_result = {
-            "duration_seconds": 0.0,
-            "pause_count": 0,
-            "long_pause_count": 0,
-            "total_pause_seconds": 0.0,
-            "average_pause_seconds": 0.0,
-            "speech_seconds": 0.0,
-            "speech_ratio": 0.0,
-            "chunk_count": 0,
-            "chunk_duration_mean": 0.0,
-            "chunk_duration_std": 0.0,
-            "pauses": [],
-            "speech_chunks": [],
-        }
+        pause_result = _empty_pause_metrics("not_available")
         energy = {
             "rms_mean": 0.0,
             "rms_std": 0.0,
@@ -951,20 +987,7 @@ def analyze_audio(
             energy = _energy_metrics(audio_path)
         except Exception as error:
             logger.warning("Audio feature extraction failed: %s", error)
-            pause_result = {
-                "duration_seconds": 0.0,
-                "pause_count": 0,
-                "long_pause_count": 0,
-                "total_pause_seconds": 0.0,
-                "average_pause_seconds": 0.0,
-                "speech_seconds": 0.0,
-                "speech_ratio": 0.0,
-                "chunk_count": 0,
-                "chunk_duration_mean": 0.0,
-                "chunk_duration_std": 0.0,
-                "pauses": [],
-                "speech_chunks": [],
-            }
+            pause_result = _empty_pause_metrics("failed")
             energy = {
                 "rms_mean": 0.0,
                 "rms_std": 0.0,
@@ -976,7 +999,20 @@ def analyze_audio(
                 **_empty_parselmouth_metrics(),
             }
 
-    duration_seconds = float(pause_result["duration_seconds"])
+    duration_seconds = _to_float(pause_result.get("duration_seconds"))
+    p_pause_count = _to_int(pause_result.get("pause_count"))
+    p_long_pause_count = _to_int(pause_result.get("long_pause_count"))
+    p_total_pause_seconds = _to_float(pause_result.get("total_pause_seconds"))
+    p_average_pause_seconds = _to_float(pause_result.get("average_pause_seconds"))
+    p_speech_seconds = _to_float(pause_result.get("speech_seconds"))
+    p_speech_ratio = _to_float(pause_result.get("speech_ratio"))
+    p_detection_backend = str(
+        pause_result.get("pause_detection_backend") or "not_available"
+    )
+    p_speech_chunks = pause_result.get("speech_chunks", [])
+    if not isinstance(p_speech_chunks, list):
+        p_speech_chunks = []
+
     segment_result = _segment_metrics(stt_segments)
     word_timing_result = _word_timing_metrics(stt_segments)
     hesitation = _hesitation_metrics(
@@ -987,9 +1023,8 @@ def analyze_audio(
         word_timing_result=word_timing_result,
     )
 
-    speech_seconds = float(pause_result.get("speech_seconds") or 0.0)
-    if has_audio and speech_seconds > 0:
-        wpm_duration_seconds = speech_seconds
+    if has_audio and p_speech_seconds > 0:
+        wpm_duration_seconds = p_speech_seconds
         words_per_minute_basis = "speech_seconds"
     elif has_audio and duration_seconds > 0:
         wpm_duration_seconds = duration_seconds
@@ -1008,8 +1043,8 @@ def analyze_audio(
     weighted_filler_ratio = round(
         filler_result["weighted_total"] / max(words, 1), 3
     )
-    pause_burden = (
-        pause_result["total_pause_seconds"] / duration_seconds
+    pause_burden: float = (
+        p_total_pause_seconds / duration_seconds
         if duration_seconds > 0
         else 0.0
     )
@@ -1027,7 +1062,7 @@ def analyze_audio(
         articulation_score = _articulation_score(
             segment_result["articulation_rate_wps"]
         )
-        speech_ratio_score = _speech_ratio_score(pause_result["speech_ratio"])
+        speech_ratio_score = _speech_ratio_score(p_speech_ratio)
         cadence_score = _cadence_score(segment_result["cadence_variation"])
         pitch_stability_score = _pitch_stability_score(energy)
         energy_score = _energy_score(energy)
@@ -1042,8 +1077,8 @@ def analyze_audio(
     else:
         pause_score = clamp(
             10.0
-            - pause_result["long_pause_count"] * 1.2
-            - pause_result["pause_count"] * 0.3
+            - p_long_pause_count * 1.2
+            - p_pause_count * 0.3
             - pause_burden * 6.5
             - max(0, hesitation["pause_before_short_segment_count"] - 1) * 0.5
         )
@@ -1091,14 +1126,14 @@ def analyze_audio(
         "words_per_minute": words_per_minute,
         "words_per_minute_basis": words_per_minute_basis,
         "pace_label": pace_label,
-        "pause_count": pause_result["pause_count"],
-        "long_pause_count": pause_result["long_pause_count"],
-        "total_pause_seconds": pause_result["total_pause_seconds"],
-        "average_pause_seconds": pause_result["average_pause_seconds"],
-        "speech_seconds": pause_result["speech_seconds"],
-        "speech_ratio": pause_result["speech_ratio"],
-        "pause_detection_backend": pause_result.get("pause_detection_backend"),
-        "speech_chunks": pause_result["speech_chunks"],
+        "pause_count": p_pause_count,
+        "long_pause_count": p_long_pause_count,
+        "total_pause_seconds": p_total_pause_seconds,
+        "average_pause_seconds": p_average_pause_seconds,
+        "speech_seconds": p_speech_seconds,
+        "speech_ratio": p_speech_ratio,
+        "pause_detection_backend": p_detection_backend,
+        "speech_chunks": p_speech_chunks,
         "filler_count": filler_result["total"],
         "filler_weighted_total": filler_result["weighted_total"],
         "filler_words": filler_result["by_phrase"],
