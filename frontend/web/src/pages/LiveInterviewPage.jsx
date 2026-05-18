@@ -288,7 +288,7 @@ export default function LiveInterviewPage() {
       if (msg.type === 'final') {
         stopTimer();
         setTranscript(msg.text);
-        setStatus('Ready');
+        setStatus('Saving');
         setIsRecording(false);
         setIsPaused(false);
         setLiveStream(null);
@@ -306,6 +306,7 @@ export default function LiveInterviewPage() {
         } else {
           await fetchFollowups(msg.text, idx);
         }
+        setStatus('Ready');
       }
       if (msg.type === 'error') {
         console.error('WebSocket error:', msg.message);
@@ -402,6 +403,20 @@ export default function LiveInterviewPage() {
   }, [advanceOrFinish]);
 
   if (!currentQuestion && !followupLoading && !showFollowup) return null;
+
+  if (status === 'Uploading') {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 w-full h-full min-h-[60vh]">
+        <div className="glass-panel p-10 max-w-md w-full text-center flex flex-col items-center animate-in fade-in zoom-in duration-300">
+          <div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mb-6" />
+          <h2 className="text-2xl font-bold text-white mb-2">Finalizing Interview</h2>
+          <p className="text-white/60 text-sm">
+            Saving your responses and analyzing your overall performance...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const statusColor = {
     Ready:        'bg-green-400',
@@ -549,7 +564,7 @@ export default function LiveInterviewPage() {
       )}
 
       {/* ── Controls: Recording + Skip ── */}
-      {!showFollowup && status !== 'Transcribing' && status !== 'Uploading' ? (
+      {!showFollowup && status !== 'Transcribing' && status !== 'Uploading' && status !== 'Saving' ? (
         <div className="flex flex-col items-center gap-4 w-full">
           <RecordingControls
             isRecording={isRecording}

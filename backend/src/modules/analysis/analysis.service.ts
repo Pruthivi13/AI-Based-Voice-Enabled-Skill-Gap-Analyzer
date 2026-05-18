@@ -74,12 +74,26 @@ const getFreshAudioUrl = async (upload: any): Promise<string | null> => {
   return data.signedUrl;
 };
 
+const llmProviderLabel = (llmProvider?: string | null) => {
+  const provider = llmProvider?.split(':')[0]?.toLowerCase();
+  if (provider === 'gemini') return 'Gemini API';
+  if (provider === 'groq') return 'Groq API';
+  return null;
+};
+
 const scoringModeLabel = (llmProvider?: string | null, scorerBackend?: string | null) => {
-  if (llmProvider === 'heuristic_fallback' || scorerBackend === 'local_semantic') {
+  const liveProviderLabel = llmProviderLabel(llmProvider);
+  if (liveProviderLabel) {
+    return liveProviderLabel;
+  }
+  if (llmProvider === 'heuristic_fallback') {
     return 'heuristic mode';
   }
   if (scorerBackend === 'transformer') {
     return 'AI model';
+  }
+  if (scorerBackend === 'local_semantic') {
+    return 'semantic scorer';
   }
   if (scorerBackend === 'skipped') {
     return 'rubric only';
@@ -123,8 +137,7 @@ const mapPipelineResultToAnalysis = (mlResult: any) => {
     'unknown';
   const hasAudio = Boolean(audio.audio_available);
   const scoringMode = scoringModeLabel(llmProvider, scorerBackend);
-  const isHeuristic =
-    llmProvider === 'heuristic_fallback' || scorerBackend === 'local_semantic';
+  const isHeuristic = llmProvider === 'heuristic_fallback';
   const fluencyScore = hasAudio
     ? bucketScore(delivery.fluency, isHeuristic)
     : null;

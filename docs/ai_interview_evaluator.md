@@ -86,13 +86,14 @@ KEYWORD_FUZZY_THRESHOLD=86
 KEY_POINT_FUZZY_THRESHOLD=72
 
 GEMINI_API_KEY=...
-GEMINI_MODEL=gemini-1.5-flash
+GEMINI_MODEL=gemini-3.1-flash-lite
 
 GROQ_API_KEY=...
 GROQ_STT_MODEL=whisper-large-v3-turbo
 GROQ_LLM_MODEL=llama-3.1-8b-instant
 
 LLM_PROVIDER_ORDER=gemini,groq
+LLM_PROVIDER_TIMEOUT_SECONDS=20
 ```
 
 ## Example Transcript-Only Development Call

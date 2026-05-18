@@ -28,8 +28,7 @@ function mapPipelineResultToAnalysis(mlResult) {
     mlResult?.scorer_backend ??
     mlResult?.content_model_evaluation?.scorer_backend ??
     null;
-  const isHeuristic =
-    llmProvider === 'heuristic_fallback' || scorerBackend === 'local_semantic';
+  const isHeuristic = llmProvider === 'heuristic_fallback';
   const bucket = (score) => {
     if (score == null) return null;
     const numericScore = Number(score);

@@ -141,12 +141,16 @@ export default function PerformanceAnalysisPage() {
         : s >= 6
           ? 'borderline'
           : 'needs-improvement';
-  const scoringModeStyle = (mode) =>
-    mode === 'heuristic mode'
-      ? 'bg-amber-500/10 text-amber-600 border-amber-500/20'
-      : mode === 'AI model'
-        ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-        : 'bg-slate-500/10 text-slate-500 border-slate-500/20';
+  const scoringModeStyle = (mode) => {
+    const liveApiMode = ['AI model', 'Gemini API', 'Groq API'].includes(mode);
+    if (mode === 'heuristic mode') {
+      return 'bg-amber-500/10 text-amber-600 border-amber-500/20';
+    }
+    if (liveApiMode) {
+      return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
+    }
+    return 'bg-slate-500/10 text-slate-500 border-slate-500/20';
+  };
 
   // Stable roadmap ID for localStorage (role + session)
   const roadmapId = `${roadmapRole}-${sessionId}`

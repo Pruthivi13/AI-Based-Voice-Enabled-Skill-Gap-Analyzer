@@ -21,15 +21,34 @@ from typing import Any
 from dotenv import load_dotenv
 from utils.logger import setup_logger
 
-load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = BACKEND_DIR.parent
+
+# Prefer the ML backend env, but also support keys kept in the repo root .env.
+load_dotenv(dotenv_path=BACKEND_DIR / ".env")
+load_dotenv(dotenv_path=PROJECT_ROOT / ".env")
 
 logger = setup_logger(__name__)
 
 _MAX_CACHE_SIZE = 500
 _eval_cache: OrderedDict[str, dict[str, Any]] = OrderedDict()
+DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite"
+DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant"
 
 
-def _provider_timeout_seconds(default: float = 10.0) -> float:
+def _provider_signature() -> dict[str, Any]:
+    return {
+        "order": os.getenv("LLM_PROVIDER_ORDER", "gemini,groq"),
+        "gemini_model": os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL),
+        "groq_model": os.getenv("GROQ_LLM_MODEL", DEFAULT_GROQ_MODEL),
+        "has_gemini_key": bool(
+            os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        ),
+        "has_groq_key": bool(os.getenv("GROQ_API_KEY")),
+    }
+
+
+def _provider_timeout_seconds(default: float = 20.0) -> float:
     raw = os.getenv("LLM_PROVIDER_TIMEOUT_SECONDS")
     if raw is None:
         return default
@@ -53,6 +72,7 @@ def _cache_key(
             "k": sorted(str(item).strip().lower() for item in expected_keywords),
             "p": sorted(str(item).strip().lower() for item in expected_key_points),
             "i": ideal_answer.strip().lower(),
+            "provider_config": _provider_signature(),
         },
         sort_keys=True,
     )
@@ -232,7 +252,7 @@ def _evaluate_with_gemini(prompt: str) -> dict[str, Any]:
     import google.generativeai as genai
 
     genai.configure(api_key=api_key)
-    model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    model_name = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
     model = genai.GenerativeModel(model_name)
     request_options = {"timeout": _provider_timeout_seconds()}
 
@@ -287,7 +307,7 @@ def _evaluate_with_groq(prompt: str) -> dict[str, Any]:
 
     from groq import Groq
 
-    model_name = os.getenv("GROQ_LLM_MODEL", "llama-3.1-8b-instant")
+    model_name = os.getenv("GROQ_LLM_MODEL", DEFAULT_GROQ_MODEL)
     client = Groq(api_key=api_key, timeout=_provider_timeout_seconds())
 
     max_retries = _provider_max_retries("groq")
@@ -490,5 +510,15 @@ def evaluate_content(
         keyword_result,
     )
     result["provider_errors"] = errors
-    _cache_eval_result(key, result)
+
+    configured_provider_failed = any(
+        (
+            provider == "gemini"
+            and (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+        )
+        or (provider == "groq" and os.getenv("GROQ_API_KEY"))
+        for provider in provider_order
+    )
+    if not configured_provider_failed:
+        _cache_eval_result(key, result)
     return result

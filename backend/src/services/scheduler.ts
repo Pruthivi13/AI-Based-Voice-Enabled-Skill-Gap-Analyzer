@@ -63,6 +63,8 @@ export async function startScheduler() {
   logger.info('pg-boss started — job queue ready (PostgreSQL-backed)');
 
   // Register workers
+  await boss.createQueue('activate-session');
+  await boss.createQueue('send-reminder');
   await boss.work<ActivateSessionData>('activate-session', handleActivateSession);
   await boss.work<SendReminderData>('send-reminder', handleSendReminder);
 
