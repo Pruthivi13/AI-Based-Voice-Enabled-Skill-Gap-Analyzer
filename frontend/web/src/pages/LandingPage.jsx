@@ -36,10 +36,10 @@ export default function LandingPage() {
       <nav className="sticky top-0 z-50 w-full backdrop-blur-md bg-dark-900/60 border-b border-white/10">
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
           <div
-            className="flex items-center gap-2 cursor-pointer"
+            className="flex items-center gap-3 cursor-pointer"
             onClick={() => navigate('/')}
           >
-            <span className="text-2xl flex items-center justify-center"><TargetIcon size={28} className="text-current" /></span>
+            <img src="/favicon.png?v=2" alt="Logo" className="w-8 h-8 object-contain" />
             <span className="text-lg font-bold text-white">AI Interview Assistant</span>
           </div>
           <div className="flex items-center gap-3">

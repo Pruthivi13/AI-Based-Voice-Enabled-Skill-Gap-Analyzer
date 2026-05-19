@@ -16,6 +16,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { fetchResources } from '../services/api';
 import ResourceCourseCard from '../components/ResourceCourseCard';
 import { useTheme } from '../context/ThemeContext';
+import { motion } from 'framer-motion';
 import {
   BookOpen, Zap, Mic, TrendingUp, Code2,
   RefreshCw, Sparkles, ChevronDown,
@@ -175,27 +176,36 @@ export default function LearningResourcesPage() {
               key={key}
               onClick={() => { setActiveTab(key); setShowAll(false); }}
               className={`
-                flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold
-                border transition-all duration-200
+                relative flex items-center px-4 py-2 rounded-full text-sm font-semibold
+                border transition-colors duration-200 overflow-hidden
                 ${active
-                  ? `bg-primary-500 text-white border-primary-500 shadow-md`
+                  ? `text-white border-transparent`
                   : isDark
                     ? `bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white`
                     : `bg-white border-surface-200 text-ink-600 hover:border-primary-300 hover:text-ink-900`
                 }
               `}
             >
-              <Icon size={14} className={active ? 'text-white' : color} />
-              {label}
-              {count > 0 && (
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                  active
-                    ? 'bg-white/25 text-white'
-                    : isDark ? 'bg-white/10 text-white/50' : 'bg-surface-200 text-ink-500'
-                }`}>
-                  {count}
-                </span>
+              {active && (
+                <motion.div
+                  layoutId="resources-filter-bubble"
+                  className="absolute inset-0 bg-primary-500 shadow-md"
+                  transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+                />
               )}
+              <div className="relative z-10 flex items-center gap-2">
+                <Icon size={14} className={active ? 'text-white' : color} />
+                {label}
+                {count > 0 && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                    active
+                      ? 'bg-white/25 text-white'
+                      : isDark ? 'bg-white/10 text-white/50' : 'bg-surface-200 text-ink-500'
+                  }`}>
+                    {count}
+                  </span>
+                )}
+              </div>
             </button>
           );
         })}

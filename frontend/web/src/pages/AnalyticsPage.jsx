@@ -89,7 +89,11 @@ export default function AnalyticsPage() {
           grid:  { color: gridColor },
         },
         x: {
-          ticks: { color: axisTextColor },
+          ticks: { 
+            color: axisTextColor,
+            maxRotation: 0,
+            autoSkip: true
+          },
           grid:  { display: false },
         },
       },
@@ -148,7 +152,7 @@ export default function AnalyticsPage() {
   const hasData = (data?.totalSessions ?? 0) > 0;
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
+    <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col gap-8">
 
       {/* ── Page header ── */}
       <div>
@@ -173,76 +177,90 @@ export default function AnalyticsPage() {
           </p>
         </div>
       ) : (
-        <>
-      {/* ── Summary stats ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: 'Total Sessions', value: data?.totalSessions ?? 0 },
-          { label: 'Average Score',  value: `${data?.averageScore ?? 0}/10` },
-          { label: 'Most Improved',  value: data?.mostImproved ?? '—' },
-          { label: 'Focus Area',     value: data?.focusArea ?? '—' },
-        ].map((stat, i) => (
-          <div key={i} className="card text-center">
-            <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${
-              isDark ? 'text-white/40' : 'text-ink-500'
-            }`}>
-              {stat.label}
-            </p>
-            <p className={`text-2xl font-extrabold ${
-              isDark ? 'text-white' : 'text-ink-900'
-            }`}>
-              {stat.value}
-            </p>
+        <div className="flex flex-col gap-6">
+          {/* ── Summary stats ── */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { label: 'Total Sessions', value: data?.totalSessions ?? 0 },
+              { label: 'Average Score',  value: `${data?.averageScore ?? 0}/10` },
+              { label: 'Most Improved',  value: typeof data?.mostImproved === 'string' ? data.mostImproved.replace(/([a-z])([A-Z])/g, '$1 $2') : (data?.mostImproved ?? '—') },
+              { label: 'Focus Area',     value: typeof data?.focusArea === 'string' ? data.focusArea.replace(/([a-z])([A-Z])/g, '$1 $2') : (data?.focusArea ?? '—') },
+            ].map((stat, i) => (
+              <div key={i} className="card text-center flex flex-col justify-center min-w-0">
+                <p className={`text-xs font-bold uppercase tracking-wider mb-1 truncate ${
+                  isDark ? 'text-white/40' : 'text-ink-500'
+                }`}>
+                  {stat.label}
+                </p>
+                <p 
+                  className={`text-xl md:text-2xl font-extrabold truncate ${
+                    isDark ? 'text-white' : 'text-ink-900'
+                  }`}
+                  title={String(stat.value)}
+                >
+                  {stat.value}
+                </p>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {/* ── SKILL GAP TIMELINE ── */}
-      <SkillTimelineChart
-        data={data?.skillTimeline ?? []}
-        delta={data?.skillDelta}
-      />
+          {/* ── BENTO GRID LAYOUT ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            
+            {/* ── LEFT COLUMN (SPAN 2) ── */}
+            <div className="lg:col-span-2 flex flex-col gap-6">
+              {/* ── SKILL GAP TIMELINE ── */}
+              <SkillTimelineChart
+                data={data?.skillTimeline ?? []}
+                delta={data?.skillDelta}
+              />
 
-      {/* ── Session score trend ── */}
-      <section className="card">
-        <h3 className={`font-bold mb-4 ${isDark ? 'text-white' : 'text-ink-900'}`}>
-          Session Score Trend
-        </h3>
-        <div className="h-64">
-          <Line data={trendData} options={trendOptions} />
-        </div>
-      </section>
-
-          {/* ── Bottom row ── */}
-          {(data?.weakAreas?.length > 0 || Object.keys(data?.competencyAverages || {}).length > 0) && (
-            <div className="grid lg:grid-cols-2 gap-8">
+              {/* ── Weak Area Frequency ── */}
               {data?.weakAreas?.length > 0 && (
                 <div className="card">
                   <h3 className={`font-bold mb-4 ${isDark ? 'text-white' : 'text-ink-900'}`}>
                     Weak Area Frequency
                   </h3>
-                  <div className="h-48">
+                  <div className="h-56">
                     <Bar data={weakAreaData} options={barOptions} />
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* ── RIGHT COLUMN (SPAN 1) ── */}
+            <div className="lg:col-span-1 flex flex-col gap-6">
+              {/* ── Session score trend ── */}
+              <section className="card">
+                <h3 className={`font-bold mb-4 ${isDark ? 'text-white' : 'text-ink-900'}`}>
+                  Session Score Trend
+                </h3>
+                <div className="h-56">
+                  <Line data={trendData} options={trendOptions} />
+                </div>
+              </section>
+
+              {/* ── Competency Averages ── */}
               {Object.keys(data?.competencyAverages || {}).length > 0 && (
-                <div className="space-y-4">
-                  <h3 className={`font-bold ${isDark ? 'text-white' : 'text-ink-900'}`}>
+                <div className="flex flex-col gap-4">
+                  <h3 className={`font-bold px-1 ${isDark ? 'text-white' : 'text-ink-900'}`}>
                     Competency Averages
                   </h3>
-                  {Object.entries(data?.competencyAverages || {}).map(([key, value]) => (
-                    <ScoreCard
-                      key={key}
-                      label={key.charAt(0).toUpperCase() + key.slice(1)}
-                      score={value}
-                    />
-                  ))}
+                  <div className="grid grid-cols-2 gap-3">
+                    {Object.entries(data?.competencyAverages || {}).map(([key, value]) => (
+                      <ScoreCard
+                        key={key}
+                        label={key.charAt(0).toUpperCase() + key.slice(1)}
+                        score={value}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
-          )}
-        </>
+
+          </div>
+        </div>
       )}
     </div>
   );

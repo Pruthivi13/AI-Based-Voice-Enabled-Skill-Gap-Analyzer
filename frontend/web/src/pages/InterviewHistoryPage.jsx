@@ -12,6 +12,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchInterviewHistory } from '../services/api';
+import { motion } from 'framer-motion';
 import HistoryCard from '../components/HistoryCard';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
@@ -59,15 +60,22 @@ export default function InterviewHistoryPage() {
             <button
               key={tab}
               onClick={() => setActiveFilter(tab)}
-              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+              className={`relative px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
                 activeFilter === tab
-                  ? 'bg-primary-500 text-white'
+                  ? 'text-white'
                   : isDark
-                    ? 'text-white/60 hover:bg-white/10'
-                    : 'text-ink-700 hover:bg-surface-100'
+                    ? 'text-white/60 hover:text-white hover:bg-white/5'
+                    : 'text-ink-700 hover:text-ink-900 hover:bg-surface-50'
               }`}
             >
-              {tab}
+              {activeFilter === tab && (
+                <motion.div
+                  layoutId="history-filter-bubble"
+                  className="absolute inset-0 rounded-full bg-primary-500"
+                  transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10">{tab}</span>
             </button>
           ))}
         </div>

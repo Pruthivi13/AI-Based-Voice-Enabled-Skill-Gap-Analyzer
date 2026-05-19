@@ -9,6 +9,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { motion } from 'framer-motion';
 import UserIcon from './ui/user-icon';
 import GearIcon from './ui/gear-icon';
 import LogoutIcon from './ui/logout-icon';
@@ -64,34 +65,40 @@ export default function Header() {
       <div className="max-w-7xl mx-auto flex items-center justify-between px-6 py-3">
         {/* Brand */}
         <button onClick={() => navigate('/')} className="flex items-center gap-2.5 group">
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center
-                          group-hover:scale-105 transition-transform ${
-                            isDark ? 'bg-dark-700' : 'bg-dark-900'
-                          }`}>
-            <svg className="w-5 h-5 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
-            </svg>
+          <div className="w-9 h-9 flex items-center justify-center group-hover:scale-105 transition-transform">
+            <img src="/favicon.png?v=2" alt="Logo" className="w-full h-full object-contain" />
           </div>
           <span className={`text-lg font-bold hidden sm:block ${isDark ? 'text-white' : 'text-ink-900'}`}>AI Interview Assistant</span>
         </button>
 
         {/* Desktop Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-1">
+        <nav className="hidden lg:flex items-center gap-1 relative">
           {navLinks.map((link) => (
             <NavLink
               key={link.to}
               to={link.to}
               className={({ isActive }) =>
-                `px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                `relative px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
                   isActive
-                    ? 'text-primary-500 bg-primary-500/10'
+                    ? 'text-primary-500'
                     : isDark
-                      ? 'text-white/60 hover:text-white hover:bg-white/10'
-                      : 'text-ink-700 hover:text-ink-900 hover:bg-surface-100'
+                      ? 'text-white/60 hover:text-white hover:bg-white/5'
+                      : 'text-ink-700 hover:text-ink-900 hover:bg-surface-50'
                 }`
               }
             >
-              {link.label}
+              {({ isActive }) => (
+                <>
+                  {isActive && (
+                    <motion.div
+                      layoutId="header-active-tab"
+                      className="absolute inset-0 rounded-full bg-primary-500/10"
+                      transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative z-10">{link.label}</span>
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
