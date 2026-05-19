@@ -16,7 +16,7 @@ import time
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from dotenv import load_dotenv
 from utils.logger import setup_logger
@@ -69,8 +69,8 @@ def _cache_key(
         {
             "q": question_text.strip().lower(),
             "t": transcript.strip().lower(),
-            "k": sorted(str(item).strip().lower() for item in expected_keywords),
-            "p": sorted(str(item).strip().lower() for item in expected_key_points),
+            "k": sorted(item.strip().lower() for item in expected_keywords),
+            "p": sorted(item.strip().lower() for item in expected_key_points),
             "i": ideal_answer.strip().lower(),
             "provider_config": _provider_signature(),
         },
@@ -249,12 +249,13 @@ def _evaluate_with_gemini(prompt: str) -> dict[str, Any]:
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY or GOOGLE_API_KEY is not configured")
 
-    import google.generativeai as genai
+    import google.generativeai as generativeai
 
+    genai = cast(Any, generativeai)
     genai.configure(api_key=api_key)
     model_name = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
     model = genai.GenerativeModel(model_name)
-    request_options = {"timeout": _provider_timeout_seconds()}
+    request_options: dict[str, Any] = {"timeout": _provider_timeout_seconds()}
 
     max_retries = _provider_max_retries("gemini")
     for attempt in range(max_retries + 1):

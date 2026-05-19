@@ -110,7 +110,7 @@ def _fuzzy_similarity(phrase: str, transcript: str) -> float:
 
     # token_set_ratio handles reordered phrases and extra words well, which is
     # exactly what interview answers tend to contain.
-    return float(fuzz.token_set_ratio(normalized_phrase, normalized_transcript))
+    return fuzz.token_set_ratio(normalized_phrase, normalized_transcript)
 
 
 NEGATION_WORDS = {

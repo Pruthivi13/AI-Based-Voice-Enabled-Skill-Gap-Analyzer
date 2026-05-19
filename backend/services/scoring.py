@@ -31,13 +31,19 @@ _LOW_SIGNAL_STOPWORDS = {
 
 
 def _round(value: float) -> float:
-    return round(float(value), 2)
+    return round(value, 2)
+
+
+def _score_or_none(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _positive_score_or_none(value: Any) -> float | None:
-    try:
-        numeric = float(value)
-    except (TypeError, ValueError):
+    numeric = _score_or_none(value)
+    if numeric is None:
         return None
     if numeric <= 0:
         return None
@@ -61,10 +67,9 @@ def _coverage_score(keyword_result: dict[str, Any]) -> float:
     concept_score = keyword_result.get("concept_score")
     scores = []
     for value in (keyword_score, concept_score):
-        try:
-            scores.append(float(value))
-        except (TypeError, ValueError):
-            continue
+        numeric = _score_or_none(value)
+        if numeric is not None:
+            scores.append(numeric)
     if scores:
         return max(scores)
 
@@ -166,7 +171,7 @@ def _low_content_signal(
 
 
 def _cap_score(value: float, cap: float) -> float:
-    return _round(min(float(value), cap))
+    return _round(min(value, cap))
 
 
 def _label(score: float) -> str:
@@ -215,16 +220,17 @@ def _feedback_for_delivery(audio_metrics: dict[str, Any]) -> list[str]:
 def _content_model_score(content_model_result: dict[str, Any] | None) -> float | None:
     if not content_model_result:
         return None
-    try:
-        return _round(content_model_result.get("content_score"))
-    except (TypeError, ValueError):
-        label = str(content_model_result.get("final_score") or "").upper()
-        if label == "STRONG":
-            return 8.5
-        if label == "AVERAGE":
-            return 6.5
-        if label == "WEAK":
-            return 4.0
+    score = _score_or_none(content_model_result.get("content_score"))
+    if score is not None:
+        return _round(score)
+
+    label = str(content_model_result.get("final_score") or "").upper()
+    if label == "STRONG":
+        return 8.5
+    if label == "AVERAGE":
+        return 6.5
+    if label == "WEAK":
+        return 4.0
     return None
 
 
