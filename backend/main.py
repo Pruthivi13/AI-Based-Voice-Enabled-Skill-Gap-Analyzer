@@ -615,6 +615,7 @@ async def websocket_transcribe(websocket: WebSocket, response_id: str):
 
     audio_chunks = []
     chunk_count = 0
+    transcription_in_progress = False
 
     try:
         while True:
@@ -638,20 +639,32 @@ async def websocket_transcribe(websocket: WebSocket, response_id: str):
                 chunk_count += 1
 
                 if chunk_count % 5 == 0:
-                    try:
-                        partial_text = await run_transcription(audio_chunks, partial=True)
-                        if partial_text:
-                            await websocket.send_text(json.dumps({
-                                "type": "partial",
-                                "text": partial_text
-                            }))
-                    except RuntimeError as e:
-                        if "close message has been sent" in str(e):
-                            logger_ws.info("WebSocket closed during partial transcription")
-                            break
-                        logger_ws.error(f"Partial transcription error: {e}")
-                    except Exception as e:
-                        logger_ws.error(f"Partial transcription error: {e}")
+                    if not transcription_in_progress:
+                        transcription_in_progress = True
+
+                        async def run_and_send(chunks_to_transcribe):
+                            nonlocal transcription_in_progress
+                            try:
+                                partial_text = await run_transcription(chunks_to_transcribe, partial=True)
+                                if partial_text:
+                                    await websocket.send_text(json.dumps({
+                                        "type": "partial",
+                                        "text": partial_text
+                                    }))
+                            except WebSocketDisconnect:
+                                logger_ws.info("WebSocket disconnected during partial transcription")
+                            except RuntimeError as e:
+                                err_str = str(e)
+                                if "close message has been sent" in err_str or "not connected" in err_str.lower():
+                                    logger_ws.info(f"WebSocket closed during partial transcription: {e}")
+                                else:
+                                    logger_ws.error("Partial transcription error", exc_info=True)
+                            except Exception as e:
+                                logger_ws.error("Partial transcription error", exc_info=True)
+                            finally:
+                                transcription_in_progress = False
+
+                        asyncio.create_task(run_and_send(list(audio_chunks)))
 
         if audio_chunks:
             final_text = await run_transcription(audio_chunks, partial=False)
@@ -669,11 +682,16 @@ async def websocket_transcribe(websocket: WebSocket, response_id: str):
                     "text": final_text,
                     "responseId": response_id
                 }))
+            except WebSocketDisconnect:
+                logger_ws.info("WebSocket disconnected before final transcription could be sent")
             except RuntimeError as e:
-                if "close message has been sent" in str(e):
+                err_str = str(e)
+                if "close message has been sent" in err_str or "not connected" in err_str.lower():
                     logger_ws.info("WebSocket closed before final transcription could be sent")
                 else:
-                    logger_ws.error(f"WebSocket send error: {e}")
+                    logger_ws.error("WebSocket send error", exc_info=True)
+            except Exception as e:
+                logger_ws.error("WebSocket send error", exc_info=True)
         else:
             try:
                 await websocket.send_text(json.dumps({
@@ -688,12 +706,13 @@ async def websocket_transcribe(websocket: WebSocket, response_id: str):
         logger_ws.info(f"WebSocket disconnected for response: {response_id}")
         # Client disconnected, nothing more to send
     except RuntimeError as e:
-        if "close message has been sent" in str(e):
+        err_str = str(e)
+        if "close message has been sent" in err_str or "not connected" in err_str.lower():
             logger_ws.info(f"WebSocket closed by client: {e}")
         else:
-            logger_ws.error(f"WebSocket error: {e}")
+            logger_ws.error("WebSocket error", exc_info=True)
     except Exception as e:
-        logger_ws.error(f"WebSocket error: {e}")
+        logger_ws.error("WebSocket error", exc_info=True)
         try:
             await websocket.send_text(json.dumps({
                 "type": "error",
